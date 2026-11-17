@@ -42,8 +42,24 @@
   .run { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 
   /* --- tabbladen --- */
-  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-  .tabs button { min-height: 38px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; padding: 0 4px; }
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .tabs button { min-height: 38px; min-width: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; font-size: 13px; padding: 0 2px; }
+
+  /* --- pistekaart --- */
+  .pistewrap { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 70vh; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: #dfe7ee; touch-action: none; flex-shrink: 0; }
+  .pistewrap svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  .pistewrap svg:active { cursor: grabbing; }
+  #piste-svg .ln { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  #piste-svg .hit { fill: none; stroke: transparent; stroke-width: 18px; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
+  .zoombtns { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 4px; z-index: 6; }
+  .zoombtns button { min-height: 38px; min-width: 38px; padding: 0; background: rgba(14,26,43,.85); font-size: 18px; line-height: 1; }
+  .piste-info { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; min-height: 40px; }
+  .piste-info b { font-weight: 600; }
+  .piste-info .open { color: var(--good); font-weight: 600; }
+  .piste-info .shut { color: var(--muted); font-weight: 600; }
+  .piste-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); align-items: center; }
+  .piste-legend i { display: inline-block; width: 18px; height: 0; border-top: 4px solid; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  .piste-legend i.dash { border-top-style: dashed; border-top-width: 3px; }
   .tabs button[aria-selected="true"] { background: var(--accent); color: #04111f; }
   .tab { display: flex; flex-direction: column; gap: 10px; }
   .tab[hidden] { display: none; }
@@ -101,6 +117,20 @@
   .dot::before { content: ""; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--dot); border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 1px 4px rgba(0,0,0,.5); }
   .dot::after { content: ""; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--dot); animation: pulse 2s infinite; }
   .dot span { position: absolute; left: 10px; top: -9px; white-space: nowrap; font-size: 11px; font-weight: 600; color: #fff; background: var(--dot); padding: 1px 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .dot2::before { background: #ff8a00; }
+  .dot2::after { border-color: #ff8a00; }
+  .dot2 span { background: #ff8a00; color: #1b0f00; }
+  .dot2[hidden] { display: none; }
+
+  /* --- zoeken op de radarkaart --- */
+  .search { display: flex; gap: 6px; }
+  .search input { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; min-height: 44px; }
+  .search button[hidden] { display: none; }
+  .search-res { list-style: none; margin: -4px 0 0; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 2px; }
+  .search-res[hidden] { display: none; }
+  .search-res button { width: 100%; text-align: left; min-height: 40px; border: 0; background: transparent; padding: 4px 8px; border-radius: 6px; }
+  .search-res button small { color: var(--muted); }
+  .search-res li.msg { padding: 6px 8px; font-size: 13px; color: var(--muted); }
   @keyframes pulse { from { transform: scale(1); opacity: .9 } to { transform: scale(2.6); opacity: 0 } }
   @media (prefers-reduced-motion: reduce) { .dot::after { animation: none; display: none; } .map, .dot { transition: none; } }
   .status { position: absolute; left: 8px; bottom: 8px; z-index: 6; font-size: 12px; background: rgba(14,26,43,.85); color: var(--fg); padding: 3px 8px; border-radius: 6px; }
@@ -206,8 +236,50 @@
 <nav class="tabs" role="tablist">
   <button role="tab" id="tabbtn-radar" aria-controls="tab-radar" aria-selected="true">Sneeuwradar</button>
   <button role="tab" id="tabbtn-weer" aria-controls="tab-weer" aria-selected="false">Weerkaart</button>
+  <button role="tab" id="tabbtn-pistes" aria-controls="tab-pistes" aria-selected="false">Pistekaart</button>
   <button role="tab" id="tabbtn-cams" aria-controls="tab-cams" aria-selected="false">Webcams</button>
 </nav>
+
+<!-- ======================= PISTEKAART ======================= -->
+<main class="tab" id="tab-pistes" role="tabpanel" hidden>
+<details class="lifts" id="lifts">
+  <summary>
+    <div>
+      <div>Liften open: <span class="count" id="lift-count">–</span> · Pistes: <span class="count" id="piste-count">–</span></div>
+      <div class="levels" id="piste-levels"></div>
+      <div class="sub" id="lift-sub">laden…</div>
+    </div>
+    <span class="more" id="lift-more" hidden>toon</span>
+  </summary>
+  <h3>Liften open</h3>
+  <ul id="lift-list"></ul>
+  <h3>Pistes open</h3>
+  <ul id="piste-list"></ul>
+</details>
+
+  <div class="pistewrap" id="pistewrap">
+    <svg id="piste-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pistekaart Les Sybelles met open liften en pistes">
+      <image id="piste-img" x="0" y="0" width="4000" height="2000" preserveAspectRatio="none"/>
+      <g id="piste-lines"></g>
+    </svg>
+    <div class="status" id="piste-status">kaart laden…</div>
+    <div class="zoombtns">
+      <button id="pz-in" aria-label="Inzoomen">+</button>
+      <button id="pz-out" aria-label="Uitzoomen">−</button>
+      <button id="pz-fit" aria-label="Hele kaart tonen">⤢</button>
+    </div>
+  </div>
+  <div class="piste-info" id="piste-info" aria-live="polite">Tik op een lift of piste voor de naam en de status.</div>
+  <div class="piste-legend">
+    <span><i style="border-color:#2fb34a"></i>groen</span>
+    <span><i style="border-color:#2e7bf0"></i>blauw</span>
+    <span><i style="border-color:#e5383b"></i>rood</span>
+    <span><i style="border-color:#111"></i>zwart</span>
+    <span><i style="border-color:#ffd400"></i>lift open</span>
+    <span><i class="dash" style="border-color:#6b7480"></i>dicht</span>
+  </div>
+  <div class="hint">Officiële pistekaart van Les Sybelles (Lumiplan), live bijgewerkt. Knijp of dubbeltik om te zoomen en sleep om te schuiven.</div>
+</main>
 
 <!-- ======================= WEBCAMS ======================= -->
 <main class="tab" id="tab-cams" role="tabpanel" hidden>
@@ -317,26 +389,19 @@
   </div>
 </section>
 
-<details class="lifts" id="lifts">
-  <summary>
-    <div>
-      <div>Liften open: <span class="count" id="lift-count">–</span> · Pistes: <span class="count" id="piste-count">–</span></div>
-      <div class="levels" id="piste-levels"></div>
-      <div class="sub" id="lift-sub">laden…</div>
-    </div>
-    <span class="more" id="lift-more" hidden>toon</span>
-  </summary>
-  <h3>Liften open</h3>
-  <ul id="lift-list"></ul>
-  <h3>Pistes open</h3>
-  <ul id="piste-list"></ul>
-</details>
+<form class="search" id="search" role="search">
+  <input type="search" id="search-q" placeholder="Zoek een skigebied of plaats" autocomplete="off" enterkeyhint="search" aria-label="Zoek een skigebied of plaats">
+  <button type="submit">Zoek</button>
+  <button type="button" id="search-clear" hidden aria-label="Gezochte plek van de kaart halen">✕</button>
+</form>
+<ul class="search-res" id="search-res" hidden></ul>
 
 <div class="mapwrap" id="mapwrap">
   <div class="map" id="map">
     <img src="https://static.wintersport.nl/images/bg-map-alps.jpg" alt="Kaart van de Alpen">
     <img class="layer" id="radar" alt="" crossorigin="anonymous" referrerpolicy="no-referrer">
     <img src="https://static.wintersport.nl/images/bg-map-overlay.png" alt="">
+    <div class="dot dot2" id="dot2" hidden><span></span></div>
     <div class="dot" id="dot"><span>Les Sybelles</span></div>
   </div>
   <div class="status" id="status" hidden></div>
@@ -881,7 +946,7 @@
     doc.querySelectorAll('script,style,noscript').forEach(e => e.remove());
     return doc;
   }
-  const textOf = doc => (doc.body ? doc.body.textContent : '').replace(/ /g, ' ').replace(/\s+/g, ' ');
+  const textOf = doc => (doc.body ? doc.body.textContent : '').replace(/ /g, ' ').replace(/\s+/g, ' ');
 
   const SOURCES = [
     { key: 'lumiplan', name: 'sybelles.ski', lead: 1, async get() {
@@ -964,24 +1029,41 @@
     }));
     renderSpot('ouillon', results);
     renderSpot('corbier', results);
-    return { note: results.find(r => r.src.key === 'lumiplan')?.data?.note };
+    return { note:results.find(r => r.src.key === 'lumiplan')?.data?.note };
   }
 
-  const LUMI = 'https://public.lumiplay.link/interactive-map/v1/map/7a6ed0ee-a613-476a-b9b3-25444e075f16/';
-  // Liften en pistes: live status van de officiële pistekaart (Lumiplan)
-  let poi = null;
+  // Liften en pistes: live status van de officiële interactieve pistekaart (Lumiplan)
+  const LUMI_API = 'https://public.lumiplay.link/interactive-map/v1/map/';
+  let lumi = null, poi = null, liftState = null;
+  async function lumiMap() {
+    if (!lumi) {
+      const m = await fetch(LUMI_API + 'name/les-sybelles').then(r => r.json());
+      lumi = { base: `${LUMI_API}${m.id}/`, img: `https://static.lumiplay.link/interactive-map/v1/image/${m.imageId}`, w: m.imageMapWidth || 4000, h: m.imageMapHeight || 2000 };
+    }
+    return lumi;
+  }
   const LEVELS = [['GREEN', 'groen'], ['BLUE', 'blauw'], ['RED', 'rood'], ['BLACK', 'zwart']];
-  const niceName = n => { n = n.replace(/^[\d.]+\s*-\s*/, ''); return n.charAt(0) + n.slice(1).toLowerCase(); };
+  // "TK NIEBLAIS III" -> "TK Nieblais III", "COL DE LA CROIX" -> "Col de la Croix"
+  const KEEP = /^(TK|TS|TSD|TSF|TC|TPH|TR|TB|[IVX]{1,4})$/, SMALL = /^(de|du|des|la|le|les|et|à|au|aux|d|l)$/i;
+  const niceName = n => n.replace(/^[\d.]+\s*-\s*/, '').trim().split(/(\s+|-|')/).map((w, i) => {
+    if (/^(\s+|-|')$/.test(w) || !w) return w;
+    if (KEEP.test(w)) return w;
+    if (i > 0 && SMALL.test(w)) return w.toLowerCase();
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join('');
   async function refreshLifts(extra) {
     const sub = $('lift-sub'), more = $('lift-more');
     try {
+      const L = await lumiMap();
       if (!poi) {
-        const s = await fetch(LUMI + 'staticPoiData?lang=fr').then(r => r.json());
+        const s = await fetch(L.base + 'staticPoiData?lang=fr').then(r => r.json());
         poi = s.items.map(i => i.data).filter(Boolean);
       }
-      const d = await fetch(LUMI + `dynamicPoiData?lang=fr&t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json());
+      const d = await fetch(L.base + `dynamicPoiData?lang=fr&t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json());
       const st = new Map(d.items.map(i => [i.id, i]));
       const isOpen = x => { const s = st.get(x.id); return !!s && (s.openingStatus === 'OPEN' || s.operating === true); };
+      liftState = { isOpen, offSeason: d.items.length && d.items.every(i => i.openingStatus === 'OUT_OF_PERIOD') };
+      drawPistes();
       const lifts = poi.filter(x => x.type === 'LIFT');
       const pistes = poi.filter(x => x.type === 'TRAIL' && x.trailType === 'DOWNHILL_SKIING');
       const openL = lifts.filter(isOpen), openP = pistes.filter(isOpen);
@@ -1018,6 +1100,129 @@
   $('lifts').addEventListener('click', e => { if ($('lift-more').hidden && e.target.closest('summary')) e.preventDefault(); });
 
   async function refreshInfo() { refreshLifts(await refreshSnow()); }
+
+  // ===================== Pistekaart =====================
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const LVCOL = { GREEN: '#2fb34a', BLUE: '#2e7bf0', RED: '#e5383b', BLACK: '#111' };
+  const LIFTNL = { GONDOLA: 'gondel', CABLE_CAR: 'kabelbaan', CHAIRLIFT: 'stoeltjeslift', DETACHABLE_CHAIRLIFT: 'stoeltjeslift', SURFACE_LIFT: 'sleeplift', MAGIC_CARPET: 'rolband' };
+  const LVNL = Object.fromEntries(LEVELS);
+  const pv = { x: 0, y: 0, k: 0 }; // linkerbovenhoek van het beeld (kaartpixels) en zoomfactor (schermpixels per kaartpixel)
+  let pisteReady = false, pisteSel = null;
+
+  function pSize() { const r = $('pistewrap').getBoundingClientRect(); return { W: r.width, H: r.height }; }
+  function pApply() {
+    const { W, H } = pSize(); if (!W || !lumi) return;
+    const kMin = Math.min(W / lumi.w, H / lumi.h);
+    pv.k = Math.min(1.5, Math.max(kMin, pv.k));
+    const vw = W / pv.k, vh = H / pv.k;
+    pv.x = vw >= lumi.w ? (lumi.w - vw) / 2 : Math.min(lumi.w - vw, Math.max(0, pv.x));
+    pv.y = vh >= lumi.h ? (lumi.h - vh) / 2 : Math.min(lumi.h - vh, Math.max(0, pv.y));
+    $('piste-svg').setAttribute('viewBox', `${pv.x} ${pv.y} ${vw} ${vh}`);
+  }
+  function pZoomAt(sx, sy, f) {
+    const px = pv.x + sx / pv.k, py = pv.y + sy / pv.k;
+    pv.k *= f; pApply();
+    pv.x = px - sx / pv.k; pv.y = py - sy / pv.k; pApply();
+  }
+  function pFit() { const { W, H } = pSize(); pv.k = Math.min(W / lumi.w, H / lumi.h); pApply(); }
+
+  function drawPistes() {
+    if (!pisteReady || !poi || !lumi) return;
+    const g = $('piste-lines'); g.textContent = '';
+    const open = x => !!liftState?.isOpen(x);
+    const items = poi.filter(x => x.paths?.length && (x.type === 'LIFT' || (x.type === 'TRAIL' && x.trailType === 'DOWNHILL_SKIING')));
+    // Eerst dichte, dan open pistes, dan liften bovenop
+    const rank = x => (x.type === 'LIFT' ? 2 : 0) + (open(x) ? 1 : 0);
+    items.sort((a, b) => rank(a) - rank(b));
+    const line = (pts, cls, attrs) => {
+      const el = document.createElementNS(SVGNS, 'polyline');
+      el.setAttribute('points', pts); el.setAttribute('class', cls);
+      for (const k in attrs) el.setAttribute(k, attrs[k]);
+      g.appendChild(el); return el;
+    };
+    for (const x of items) {
+      const on = open(x), lift = x.type === 'LIFT', sel = pisteSel === x.id;
+      for (const p of x.paths) {
+        const pts = p.points.map(q => `${(q.x * lumi.w).toFixed(1)},${(q.y * lumi.h).toFixed(1)}`).join(' ');
+        if (on || sel) line(pts, 'ln', { stroke: sel ? '#fff' : (x.trailLevel === 'BLACK' ? '#fff' : '#111'), 'stroke-width': sel ? 9 : (lift ? 6 : 6), 'stroke-opacity': sel ? 1 : .55 });
+        if (lift) line(pts, 'ln', on ? { stroke: '#ffd400', 'stroke-width': sel ? 5 : 3.5 } : { stroke: '#6b7480', 'stroke-width': sel ? 4 : 2.5, 'stroke-dasharray': '5 4' });
+        else line(pts, 'ln', on ? { stroke: LVCOL[x.trailLevel] || '#888', 'stroke-width': sel ? 6 : 4 } : { stroke: '#6b7480', 'stroke-width': sel ? 4 : 2.5, 'stroke-opacity': sel ? 1 : .75, 'stroke-dasharray': '6 4' });
+        line(pts, 'hit', { 'data-id': x.id });
+      }
+    }
+    $('piste-status').textContent = !liftState ? 'status laden…' : liftState.offSeason ? 'buiten het seizoen: alles dicht' : `live · ${items.filter(x => x.type === 'LIFT' && open(x)).length} liften open`;
+  }
+
+  function pisteInfo(id) {
+    const x = poi?.find(p => p.id === id); if (!x) return;
+    pisteSel = id; drawPistes();
+    const on = !!liftState?.isOpen(x);
+    const kind = x.type === 'LIFT' ? (LIFTNL[x.liftType] || 'lift') : `${LVNL[x.trailLevel] || ''} piste`.trim();
+    const alt = x.departureAltitude && x.arrivalAltitude ? ` · ${Math.max(x.departureAltitude, x.arrivalAltitude)}→${Math.min(x.departureAltitude, x.arrivalAltitude)} m` : '';
+    const len = x.length ? ` · ${x.length >= 1000 ? (x.length / 1000).toFixed(1).replace('.', ',') + ' km' : x.length + ' m'}` : '';
+    $('piste-info').innerHTML = `<b></b> · ${kind}${x.type === 'LIFT' ? '' : alt}${len} · <span class="${on ? 'open' : 'shut'}">${on ? 'open' : 'dicht'}</span>`;
+    $('piste-info').querySelector('b').textContent = niceName(x.name);
+  }
+
+  async function initPisteMap() {
+    if (pisteReady) { pApply(); return; }
+    try {
+      const L = await lumiMap();
+      const img = $('piste-img');
+      img.setAttribute('width', L.w); img.setAttribute('height', L.h);
+      img.setAttribute('href', L.img);
+      img.addEventListener('load', () => { if ($('piste-status').textContent === 'kaart laden…') $('piste-status').textContent = 'status laden…'; drawPistes(); }, { once: true });
+      pisteReady = true;
+      // Start ingezoomd op het midden van het gebied (Le Corbier – Les Bottières – La Toussuire)
+      const { W, H } = pSize();
+      pv.k = Math.min(W / L.w, H / L.h) * 2.2; pApply();
+      pv.x = L.w * 0.5 - W / pv.k / 2; pv.y = L.h * 0.55 - H / pv.k / 2; pApply();
+      drawPistes();
+    } catch (e) { $('piste-status').textContent = 'pistekaart niet bereikbaar'; }
+  }
+
+  (() => {
+    const svg = $('piste-svg'), pts = new Map();
+    let moved = 0, last = null;
+    const rel = e => { const r = svg.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const pair = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+    svg.addEventListener('pointerdown', e => {
+      pts.set(e.pointerId, rel(e)); svg.setPointerCapture(e.pointerId);
+      if (pts.size === 1) moved = 0;
+      last = pts.size === 2 ? pair() : null;
+    });
+    svg.addEventListener('pointermove', e => {
+      if (!pts.has(e.pointerId) || !lumi) return;
+      const prev = pts.get(e.pointerId), cur = rel(e); pts.set(e.pointerId, cur);
+      if (pts.size === 1) {
+        moved += Math.abs(cur.x - prev.x) + Math.abs(cur.y - prev.y);
+        pv.x -= (cur.x - prev.x) / pv.k; pv.y -= (cur.y - prev.y) / pv.k; pApply();
+      } else if (pts.size === 2 && last) {
+        const now = pair(); moved = 99;
+        pv.x -= (now.x - last.x) / pv.k; pv.y -= (now.y - last.y) / pv.k;
+        pZoomAt(now.x, now.y, now.d / (last.d || now.d));
+        last = now;
+      }
+    });
+    const up = e => {
+      if (!pts.has(e.pointerId)) return;
+      const single = pts.size === 1;
+      pts.delete(e.pointerId);
+      last = pts.size === 2 ? pair() : null;
+      if (single && moved < 8 && e.type === 'pointerup') {
+        const hit = document.elementsFromPoint(e.clientX, e.clientY).find(el => el.classList?.contains('hit'));
+        if (hit) pisteInfo(+hit.dataset.id);
+      }
+    };
+    svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+    svg.addEventListener('dblclick', e => { const p = rel(e); pZoomAt(p.x, p.y, 2); });
+    svg.addEventListener('wheel', e => { e.preventDefault(); const p = rel(e); pZoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+    const mid = () => { const { W, H } = pSize(); return [W / 2, H / 2]; };
+    $('pz-in').onclick = () => pZoomAt(...mid(), 1.6);
+    $('pz-out').onclick = () => pZoomAt(...mid(), 1 / 1.6);
+    $('pz-fit').onclick = () => pFit();
+    addEventListener('resize', () => { if (pisteReady) pApply(); });
+  })();
 
   // ===================== Radar-archief (op deze telefoon) =====================
   async function loadBlobImg(url) {
@@ -1279,18 +1484,59 @@
     $$('[data-play]').forEach(x => { x.textContent = '❚❚ Pauze'; x.classList.add('on'); });
     timer = setInterval(() => show(idx + 1 >= frames.length ? currentIndex() : idx + 1), 700);
   });
-  $('zoom').onclick = () => {
-    zoomed = !zoomed;
-    const s = 3, map = $('map');
-    const tx = Math.min(0, Math.max(1 - s, 0.5 - p.x * s)) * 100;
-    const ty = Math.min(0, Math.max(1 - s, 0.5 - p.y * s)) * 100;
-    map.style.transform = zoomed ? `translate(${tx}%, ${ty}%) scale(${s})` : '';
+  const ZS = 3;
+  const zoomT = () => ({ tx: Math.min(0, Math.max(1 - ZS, 0.5 - p.x * ZS)), ty: Math.min(0, Math.max(1 - ZS, 0.5 - p.y * ZS)) });
+  function setZoom(z) {
+    zoomed = z;
+    const { tx, ty } = zoomT(), map = $('map');
+    map.style.transform = zoomed ? `translate(${tx * 100}%, ${ty * 100}%) scale(${ZS})` : '';
     map.classList.toggle('zoomed', zoomed);
-    $('zoom').classList.toggle('on', zoomed);
     $('zoom').textContent = zoomed ? 'Hele Alpen' : 'Zoom Sybelles';
-    try { localStorage.setItem('zoom', zoomed ? '1' : '0'); } catch (e) {}
-  };
-  try { if (localStorage.getItem('zoom') === '1') $('zoom').onclick(); } catch (e) {}
+  }
+  $('zoom').onclick = () => setZoom(!zoomed);
+  setZoom(true); // standaard ingezoomd op Les Sybelles; de knop toont de hele Alpen
+
+  // --- zoeken: een tweede (oranje) stip voor een ander skigebied; Les Sybelles blijft altijd staan ---
+  function showPlace(pl, keepZoom) {
+    const d2 = $('dot2');
+    if (!pl) { d2.hidden = true; $('search-clear').hidden = true; try { localStorage.removeItem('place'); } catch (e) {} return true; }
+    const q = place('alps', pl.lat, pl.lon);
+    if (q.x < 0 || q.x > 1 || q.y < 0 || q.y > 1) return false;
+    d2.style.left = (q.x * 100) + '%'; d2.style.top = (q.y * 100) + '%';
+    d2.querySelector('span').textContent = pl.name;
+    d2.hidden = false; $('search-clear').hidden = false;
+    // Valt de plek buiten de ingezoomde uitsnede? Dan de hele Alpen tonen.
+    if (zoomed && !keepZoom) {
+      const { tx, ty } = zoomT();
+      const inX = q.x >= -tx / ZS && q.x <= (1 - tx) / ZS, inY = q.y >= -ty / ZS && q.y <= (1 - ty) / ZS;
+      if (!(inX && inY)) setZoom(false);
+    }
+    try { localStorage.setItem('place', JSON.stringify(pl)); } catch (e) {}
+    return true;
+  }
+  $('search').addEventListener('submit', async e => {
+    e.preventDefault();
+    const q = $('search-q').value.trim(), res = $('search-res');
+    if (q.length < 2) return;
+    res.hidden = false; res.innerHTML = '<li class="msg">zoeken…</li>';
+    try {
+      const j = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=nl&format=json`).then(r => r.json());
+      const hits = (j.results || []).filter(r => { const t = place('alps', r.latitude, r.longitude); return t.x >= 0 && t.x <= 1 && t.y >= 0 && t.y <= 1; });
+      res.innerHTML = '';
+      if (!hits.length) { res.innerHTML = '<li class="msg">Niets gevonden binnen de Alpenkaart. Probeer de naam van het dorp of skigebied.</li>'; return; }
+      for (const r of hits.slice(0, 6)) {
+        const li = document.createElement('li'), b = document.createElement('button');
+        b.type = 'button';
+        b.innerHTML = '<span></span> <small></small>';
+        b.querySelector('span').textContent = r.name;
+        b.querySelector('small').textContent = [r.admin1, r.country, r.elevation ? `${Math.round(r.elevation)} m` : ''].filter(Boolean).join(' · ');
+        b.onclick = () => { showPlace({ name: r.name, lat: r.latitude, lon: r.longitude }); res.hidden = true; $('search-q').value = ''; $('search-q').blur(); };
+        li.appendChild(b); res.appendChild(li);
+      }
+    } catch (err) { res.innerHTML = '<li class="msg">Zoeken lukt nu niet. Probeer het later opnieuw.</li>'; }
+  });
+  $('search-clear').onclick = () => { showPlace(null); $('search-res').hidden = true; };
+  try { const pl = JSON.parse(localStorage.getItem('place') || 'null'); if (pl) showPlace(pl, true); } catch (e) {}
 
   // Kaartlaag op de Europa-kaart
   function setLayer(name) {
@@ -1323,15 +1569,16 @@
     camsLoadedAt = Date.now();
   }
   function openTab(name) {
-    ['radar', 'weer', 'cams'].forEach(t => {
+    ['radar', 'weer', 'pistes', 'cams'].forEach(t => {
       $(`tab-${t}`).hidden = t !== name;
       $(`tabbtn-${t}`).setAttribute('aria-selected', String(t === name));
     });
     if (name === 'cams') { loadCams(); if (!travelStarted) { travelStarted = true; runTravel(); } }
+    if (name === 'pistes') initPisteMap();
     if (name === 'weer' && frames.length && run) show(idx);
     try { localStorage.setItem('tab', name); } catch (e) {}
   }
-  ['radar', 'weer', 'cams'].forEach(t => { $(`tabbtn-${t}`).onclick = () => openTab(t); });
+  ['radar', 'weer', 'pistes', 'cams'].forEach(t => { $(`tabbtn-${t}`).onclick = () => openTab(t); });
   $('cam-reload').onclick = () => loadCams(true);
   setInterval(() => { if (!$('tab-cams').hidden && !document.hidden) loadCams(); }, 60e3);
   try { const t = localStorage.getItem('tab'); if (t && $(`tab-${t}`)) openTab(t); } catch (e) {}
