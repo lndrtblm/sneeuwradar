@@ -405,7 +405,7 @@
 
 <footer>
   Kaarten: weermodel van <a href="https://www.wintersport.nl/weersneeuw/sneeuwradar" target="_blank" rel="noopener">wintersport.nl</a>. De tijdbalk kleurt naar de verwachte neerslag op Les Sybelles.
-  Sneeuw en liften: <a href="https://www.sybelles.ski/" target="_blank" rel="noopener">sybelles.ski</a> (Lumiplan), <a href="https://www.bergfex.com/le-corbier/schneebericht/" target="_blank" rel="noopener">bergfex</a>, skiresort.info, snow-forecast.com en skipass.com.
+  Sneeuw en liften: <a href="https://www.sybelles.ski/" target="_blank" rel="noopener">sybelles.ski</a> (Lumiplan), skiresort.info, snow-forecast.com en skipass.com.
   Weerbeeld: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. Ververst automatisch. <span id="checked"></span>
 </footer>
 
@@ -873,39 +873,13 @@
   const num = s => { const n = parseFloat(String(s).replace(',', '.')); return isFinite(n) ? Math.round(n) : null; };
   async function getDoc(path) {
     // Op Netlify via de eigen proxy (_redirects); elders uit het GitHub-archief, dat de pagina's elk uur ophaalt.
-    // bergfex weigert automatische verzoeken; buiten Netlify komt die via een hulppagina op Netlify (bergfexViaNetlify).
     const viaNetlify = location.hostname.endsWith('netlify.app');
-    let html;
-    if (path === '/bron/bergfex' && !viaNetlify) html = await bergfexViaNetlify();
-    else {
-      const url = path.startsWith('/bron/') && !viaNetlify ? `${ARCHIVE}${path.slice(1)}.html` : path;
-      const r = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error(r.status);
-      html = await r.text();
-    }
-    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const url = path.startsWith('/bron/') && !viaNetlify ? `${ARCHIVE}${path.slice(1)}.html` : path;
+    const r = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
     doc.querySelectorAll('script,style,noscript').forEach(e => e.remove());
     return doc;
-  }
-  // Onzichtbaar venstertje naar de Netlify-site, die de bergfex-pagina via zijn eigen proxy ophaalt en terugstuurt
-  const NETLIFY = 'https://sneeuwradarljb.netlify.app';
-  function bergfexViaNetlify() {
-    return new Promise((resolve, reject) => {
-      const f = document.createElement('iframe');
-      f.hidden = true;
-      f.src = `${NETLIFY}/bergfex.html?t=${Date.now()}`;
-      const done = (fn, v) => { clearTimeout(timer); removeEventListener('message', onMsg); f.remove(); fn(v); };
-      const onMsg = e => {
-        if (e.origin !== NETLIFY || e.source !== f.contentWindow || !e.data) return;
-        if (e.data.ready) f.contentWindow.postMessage('bergfex', NETLIFY);
-        else if ('bergfex' in e.data) e.data.bergfex ? done(resolve, e.data.bergfex) : done(reject, new Error(e.data.status));
-      };
-      let timer = setTimeout(() => done(reject, new Error('timeout')), 12000);
-      // Geladen maar geen hulppagina (bijv. Netlify uit de lucht)? Dan niet blijven wachten.
-      f.onload = () => { clearTimeout(timer); timer = setTimeout(() => done(reject, new Error('geen antwoord')), 6000); };
-      addEventListener('message', onMsg);
-      document.body.appendChild(f);
-    });
   }
   const textOf = doc => (doc.body ? doc.body.textContent : '').replace(/ /g, ' ').replace(/\s+/g, ' ');
 
@@ -924,17 +898,6 @@
         });
         const upd = doc.querySelector('.intro_maj')?.textContent.trim();
         if (upd) out.note = upd.replace('Mise à jour le', 'bijgewerkt').replace(' à ', ' ');
-        return out;
-      } },
-    { key: 'bergfex', name: 'bergfex', lead: 2, async get() {
-        const t = textOf(await getDoc('/bron/bergfex'));
-        const out = {};
-        const m = t.match(/Mountain\s*\(([^)]*)\)\s*(\d+)\s*cm/i), v = t.match(/Valley\s*\(([^)]*)\)\s*(\d+)\s*cm/i);
-        const altOf = s => num((s.match(/([\d.,]{3,6})\s*m/) || [])[1]?.replace(/[.,]/g, ''));
-        if (m) out.ouillon = { cm: num(m[2]), alt: altOf(m[1]) };
-        if (v) out.corbier = { cm: num(v[2]), alt: altOf(v[1]) };
-        const l = t.match(/Open lifts\s*(\d+)\s*of\s*(\d+)/i);
-        if (l) out.lifts = { open: +l[1], total: +l[2] };
         return out;
       } },
     { key: 'skiresort', name: 'skiresort.info', async get() {
@@ -1001,8 +964,7 @@
     }));
     renderSpot('ouillon', results);
     renderSpot('corbier', results);
-    const bf = results.find(r => r.src.key === 'bergfex')?.data?.lifts;
-    return { bergfexLifts: bf, note: results.find(r => r.src.key === 'lumiplan')?.data?.note };
+    return { note: results.find(r => r.src.key === 'lumiplan')?.data?.note };
   }
 
   const LUMI = 'https://public.lumiplay.link/interactive-map/v1/map/7a6ed0ee-a613-476a-b9b3-25444e075f16/';
@@ -1033,7 +995,6 @@
       }).join('');
 
       const parts = [offSeason ? 'buiten het seizoen' : 'live via sybelles.ski'];
-      if (extra?.bergfexLifts) parts.push(`bergfex (Le Corbier): ${extra.bergfexLifts.open} van ${extra.bergfexLifts.total} liften`);
       if (extra?.note) parts.push(`sneeuw ${extra.note}`);
       sub.textContent = parts.join(' · ');
 
@@ -1050,7 +1011,7 @@
       if (!any) $('lifts').open = false;
     } catch (e) {
       $('lift-count').textContent = '–'; $('piste-count').textContent = '–';
-      sub.textContent = extra?.bergfexLifts ? `bergfex (Le Corbier): ${extra.bergfexLifts.open} van ${extra.bergfexLifts.total} liften` : 'lift- en pistestatus niet bereikbaar';
+      sub.textContent = 'lift- en pistestatus niet bereikbaar';
     }
   }
   $('lifts').addEventListener('toggle', () => { $('lift-more').textContent = $('lifts').open ? 'verberg' : 'toon'; });
