@@ -1,0 +1,1368 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- De kaartserver weigert beelden als er een andere website als verwijzer meegestuurd wordt -->
+<meta name="referrer" content="no-referrer">
+<title>Sneeuwradar Alpen</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sneeuwradar">
+<meta name="theme-color" content="#0e1a2b">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<style>
+  :root {
+    --bg: #0e1a2b;
+    --panel: #16263d;
+    --line: #2a3f5e;
+    --dry: #233650;
+    --fg: #e8f0fb;
+    --muted: #8fa5c4;
+    --accent: #4da3ff;
+    --dot: #1565ff;
+    --good: #3ccf6e;
+    --warn: #f0b429;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    --thumb: 26px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg); font: 15px/1.4 var(--font);
+    padding: env(safe-area-inset-top, 0px) max(12px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(12px, env(safe-area-inset-left, 0px));
+    display: flex; flex-direction: column; gap: 10px;
+    -webkit-user-select: none; user-select: none;
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-top: 10px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  .run { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* --- tabbladen --- */
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .tabs button { min-height: 38px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; padding: 0 4px; }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: #04111f; }
+  .tab { display: flex; flex-direction: column; gap: 10px; }
+  .tab[hidden] { display: none; }
+
+  /* --- webcams --- */
+  .cam { display: flex; flex-direction: column; gap: 6px; }
+  .cam-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .cam-head h2 { font-size: 16px; margin: 0; }
+  .cam-head small { color: var(--muted); font-size: 12px; }
+  .cam-frame { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 60vh; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+  .cam-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .hint { font-size: 11px; color: var(--muted); }
+
+  /* --- sneeuwhoogte --- */
+  .spots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .spot { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .spot-name { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; gap: 6px; }
+  .spot-name small { color: var(--muted); font-weight: 400; }
+  .spot-main { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .spot-main span { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+  .spot-src { font-size: 11px; color: var(--muted); }
+  .spot-src b { color: var(--fg); font-weight: 600; }
+  .spot-others { list-style: none; margin: 4px 0 0; padding: 4px 0 0; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); display: grid; gap: 1px; }
+  .spot-others li { display: flex; justify-content: space-between; gap: 6px; }
+  .spot-others li b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .lifts { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+  .lifts summary { cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; list-style: none; }
+  .lifts summary::-webkit-details-marker { display: none; }
+  .lifts summary .count { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .lifts summary .more { color: var(--accent); font-size: 12px; white-space: nowrap; }
+  .lifts .sub { font-size: 11px; color: var(--muted); }
+  .lifts ul { margin: 6px 0 0; padding: 6px 0 0; border-top: 1px solid var(--line); list-style: none; columns: 2; column-gap: 12px; font-size: 12px; }
+  .lifts li { break-inside: avoid; padding: 1px 0; }
+  .lifts li::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 6px; vertical-align: 1px; }
+  .lifts h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 8px 0 0; }
+  .lifts h3 + ul { margin-top: 2px; }
+  .levels { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin: 2px 0; }
+  .levels span::before, .lifts li.lv::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+  .lv-GREEN::before { background: #2fb34a !important; }
+  .lv-BLUE::before { background: #2e7bf0 !important; }
+  .lv-RED::before { background: #e5383b !important; }
+  .lv-BLACK::before { background: #000 !important; box-shadow: 0 0 0 1px #8fa5c4; }
+
+  /* --- kaarten --- */
+  .mapwrap { position: relative; width: 100%; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: #cfd8dc; flex-shrink: 0; }
+  #mapwrap { aspect-ratio: 960 / 586; }
+  #euwrap { aspect-ratio: 869 / 696; }
+  .map { position: absolute; inset: 0; transform-origin: 0 0; transition: transform .35s ease; }
+  .map img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .map .layer { opacity: .8; }
+  .map .layer.hidden { opacity: 0; }
+  .dot { position: absolute; width: 0; height: 0; z-index: 5; transition: transform .35s ease; }
+  .map.zoomed .dot { transform: scale(.4); }
+  .dot::before { content: ""; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--dot); border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 1px 4px rgba(0,0,0,.5); }
+  .dot::after { content: ""; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--dot); animation: pulse 2s infinite; }
+  .dot span { position: absolute; left: 10px; top: -9px; white-space: nowrap; font-size: 11px; font-weight: 600; color: #fff; background: var(--dot); padding: 1px 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  @keyframes pulse { from { transform: scale(1); opacity: .9 } to { transform: scale(2.6); opacity: 0 } }
+  @media (prefers-reduced-motion: reduce) { .dot::after { animation: none; display: none; } .map, .dot { transition: none; } }
+  .status { position: absolute; left: 8px; bottom: 8px; z-index: 6; font-size: 12px; background: rgba(14,26,43,.85); color: var(--fg); padding: 3px 8px; border-radius: 6px; }
+
+  .time { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .time .when { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .time .rel { font-size: 13px; color: var(--muted); }
+  .chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; background: var(--accent); color: #04111f; white-space: nowrap; }
+  .chip.past { background: var(--line); color: var(--muted); }
+
+  /* --- tijdbalk in de kleuren van de sneeuwval op Les Sybelles --- */
+  .controls { display: flex; align-items: center; gap: 8px; }
+  .timeline { position: relative; flex: 1; min-width: 0; height: 44px; }
+  .track { position: absolute; left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2); top: 13px; height: 18px; display: flex; border-radius: 4px; overflow: hidden; background: var(--dry); }
+  .track i { flex: 1; background: var(--dry); border-right: 1px solid rgba(14,26,43,.35); }
+  .track i.day { border-left: 2px solid var(--muted); }
+  .track i.loading { background: repeating-linear-gradient(90deg, var(--dry) 0 3px, var(--line) 3px 6px); }
+  .days { position: absolute; left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2); top: 32px; height: 12px; font-size: 9px; color: var(--muted); }
+  .days span { position: absolute; transform: translateX(2px); white-space: nowrap; }
+  .timeline input[type=range] { position: absolute; inset: 0; width: 100%; height: 44px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; }
+  .timeline input[type=range]::-webkit-slider-runnable-track { height: 44px; background: transparent; }
+  .timeline input[type=range]::-moz-range-track { height: 44px; background: transparent; }
+  .timeline input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--thumb); height: 26px; margin-top: 9px; border-radius: 6px; background: transparent; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.5); }
+  .timeline input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 6px; background: transparent; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
+
+  button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-height: 44px; min-width: 44px; padding: 0 12px; cursor: pointer; }
+  button:active { background: var(--line); }
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.on { background: var(--accent); color: #04111f; border-color: var(--accent); }
+  .row2 { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row2 button { flex: 1; }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .seg button { min-height: 38px; padding: 0 4px; font-size: 13px; }
+
+  .legend { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; font-size: 11px; }
+  .legend .lbl { color: var(--muted); }
+  .scale { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border-radius: 4px; overflow: hidden; }
+  .scale i { font-style: normal; text-align: center; padding: 3px 0; color: #0b1626; font-weight: 600; font-size: 10px; }
+  .scale.small i { font-size: 8px; padding: 3px 0; }
+
+  /* --- webcam-tijdreis --- */
+  .travel { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+  .seg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .seg2 button { min-height: 38px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { min-height: 34px; padding: 0 10px; font-size: 13px; border-radius: 99px; }
+  .pick { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+  .pick input { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+  .compare { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 60vh; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000; touch-action: pan-y; }
+  .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: var(--pan, 50%) center; display: block; }
+  .pan { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .pan input { flex: 1; accent-color: var(--accent); }
+  .compare .now { clip-path: inset(0 0 0 var(--pos, 50%)); }
+  .compare .line { position: absolute; top: 0; bottom: 0; left: var(--pos, 50%); width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,.6); pointer-events: none; }
+  .compare .line::after { content: "‹ ›"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; color: #04111f; font-weight: 700; font-size: 13px; padding: 2px 6px; border-radius: 99px; white-space: nowrap; }
+  .compare .lbl { position: absolute; top: 6px; font-size: 11px; font-weight: 600; background: rgba(14,26,43,.85); color: var(--fg); padding: 2px 6px; border-radius: 4px; pointer-events: none; }
+  .compare .lbl.l { left: 6px; } .compare .lbl.r { right: 6px; text-align: right; }
+  .compare input[type=range] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; -webkit-appearance: none; appearance: none; }
+  .compare .busy { position: absolute; inset: auto 6px 6px auto; font-size: 11px; background: rgba(14,26,43,.85); padding: 2px 6px; border-radius: 4px; }
+
+  /* --- radar terugkijken --- */
+  .history { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: block; }
+  .history > summary { cursor: pointer; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; list-style: none; }
+  .history > summary::-webkit-details-marker { display: none; }
+  .history > summary small { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .history[open] > summary { margin-bottom: 8px; }
+  .hist-body { display: flex; flex-direction: column; gap: 8px; }
+  .strip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1px; height: 26px; }
+  .strip button { min-height: 0; min-width: 0; padding: 0; border: 0; border-radius: 2px; background: var(--dry); }
+  .strip button.none { background: transparent; outline: 1px dashed var(--line); outline-offset: -1px; }
+  .strip button.sel { outline: 2px solid #fff; outline-offset: 0; }
+  .strip-lbl { position: relative; height: 12px; font-size: 9px; color: var(--muted); }
+  .strip-lbl span { position: absolute; white-space: nowrap; }
+  .hist-nav { display: flex; gap: 8px; align-items: center; }
+  .hist-nav input { flex: 1; min-width: 0; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  #histwrap { aspect-ratio: 960 / 586; }
+
+  /* --- samenvatting --- */
+  .summary { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; -webkit-user-select: text; user-select: text; }
+  .summary h2 { font-size: 15px; margin: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .verdict { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--line); color: var(--fg); white-space: nowrap; }
+  .verdict.v3 { background: rgb(157,111,212); color: #fff; }
+  .verdict.v2 { background: rgb(0,150,255); color: #04111f; }
+  .verdict.v1 { background: rgb(0,255,255); color: #04111f; }
+  .summary .lead { font-size: 15px; font-weight: 600; margin: 0; text-wrap: pretty; }
+  .summary p { margin: 0; font-size: 13px; text-wrap: pretty; }
+  .summary ul { margin: 0; padding-left: 18px; font-size: 13px; display: grid; gap: 4px; }
+  .summary .models { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; font-size: 11px; text-align: center; }
+  .summary .models div { background: var(--bg); border-radius: 6px; padding: 4px 2px; }
+  .summary .models b { display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .summary .src { font-size: 11px; color: var(--muted); }
+
+  footer { font-size: 11px; color: var(--muted); padding-bottom: 12px; margin-top: auto; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sneeuwradar Alpen</h1>
+  <div class="run" id="run">model laden…</div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" id="tabbtn-radar" aria-controls="tab-radar" aria-selected="true">Sneeuwradar</button>
+  <button role="tab" id="tabbtn-weer" aria-controls="tab-weer" aria-selected="false">Weerkaart</button>
+  <button role="tab" id="tabbtn-cams" aria-controls="tab-cams" aria-selected="false">Webcams</button>
+</nav>
+
+<!-- ======================= WEBCAMS ======================= -->
+<main class="tab" id="tab-cams" role="tabpanel" hidden>
+  <section class="cam">
+    <div class="cam-head"><h2>L'Ouillon</h2><small>2431 m</small></div>
+    <div class="cam-frame"><iframe data-src="https://www.skaping.com/les-sybelles/ouillon" title="Webcam L'Ouillon" allow="fullscreen"></iframe></div>
+  </section>
+  <section class="cam">
+    <div class="cam-head"><h2>Le Corbier</h2><small>front de neige · 1550 m</small></div>
+    <div class="cam-frame"><iframe data-src="https://www.skaping.com/le-corbier/front-de-neige" title="Webcam Le Corbier front de neige" allow="fullscreen"></iframe></div>
+  </section>
+  <button id="cam-reload">Webcams vernieuwen</button>
+  <div class="hint">Beelden van de officiële webcams van sybelles.ski (Skaping). Ze worden elke 10 minuten automatisch ververst. In het beeld kun je swipen, zoomen en terugkijken.</div>
+
+  <section class="travel" id="travel">
+    <div class="cam-head"><h2>Tijdreis</h2><small>toen ↔ nu</small></div>
+    <div class="seg2" role="group" aria-label="Webcam">
+      <button data-cam="ouillon" class="on">L'Ouillon</button>
+      <button data-cam="corbier">Le Corbier</button>
+    </div>
+    <div class="chips" role="group" aria-label="Hoe ver terug">
+      <button data-back="1">gisteren</button>
+      <button data-back="3">3 dagen</button>
+      <button data-back="7" class="on">1 week</button>
+      <button data-back="14">2 weken</button>
+      <button data-back="30">1 maand</button>
+      <button data-back="60">2 maanden</button>
+    </div>
+    <label class="pick" for="tr-when">Of kies zelf een moment <input type="datetime-local" id="tr-when"></label>
+    <div class="compare" id="cmp">
+      <img id="cmp-then" alt="Webcambeeld toen" referrerpolicy="no-referrer">
+      <img id="cmp-now" class="now" alt="Webcambeeld nu" referrerpolicy="no-referrer">
+      <div class="line"></div>
+      <span class="lbl l" id="lbl-then">toen</span>
+      <span class="lbl r" id="lbl-now">nu</span>
+      <input type="range" id="cmp-pos" min="0" max="100" value="50" aria-label="Schuif tussen toen en nu">
+      <span class="busy" id="cmp-busy" hidden>beelden zoeken…</span>
+    </div>
+    <label class="pan" for="cmp-pan">Kijkrichting <input type="range" id="cmp-pan" min="0" max="100" value="50"></label>
+    <div class="hint">Schuif over het beeld: links zie je toen, rechts nu. 's Avonds en 's nachts vergelijkt de app de beelden van 12:00 uur.</div>
+  </section>
+</main>
+
+<!-- ======================= WEERKAART ======================= -->
+<main class="tab" id="tab-weer" role="tabpanel" hidden>
+  <section class="summary" id="summary" aria-live="polite">
+    <h2>Weerbeeld Les Sybelles <span class="verdict" id="sum-verdict">laden…</span></h2>
+    <p class="lead" id="sum-lead">De samenvatting wordt berekend…</p>
+    <p id="sum-now"></p>
+    <ul id="sum-events"></ul>
+    <div class="models" id="sum-models" hidden></div>
+    <p id="sum-trust"></p>
+    <div class="src" id="sum-src"></div>
+  </section>
+
+  <div class="seg" role="group" aria-label="Kaartlaag">
+    <button data-layer="precip" class="on">Neerslag</button>
+    <button data-layer="temp850">Temp 1500 m</button>
+    <button data-layer="wind">Wind</button>
+    <button data-layer="jetstream">Straalstroom</button>
+  </div>
+
+  <div class="mapwrap" id="euwrap">
+    <div class="map" id="eumap">
+      <img src="https://static.wintersport.nl/images/bg-map-europe.jpg" alt="Kaart van Europa">
+      <img class="layer" id="eulayer" alt="" crossorigin="anonymous" referrerpolicy="no-referrer">
+      <img src="https://static.wintersport.nl/images/bg-europe-overlay.png" alt="">
+      <div class="dot" id="eudot"><span>Les Sybelles</span></div>
+    </div>
+    <div class="status" id="eustatus" hidden></div>
+  </div>
+
+  <div class="time">
+    <div>
+      <div class="when" data-when>–</div>
+      <div class="rel" id="eu-rel">–</div>
+    </div>
+    <span class="chip" data-chip hidden>nu</span>
+  </div>
+  <div class="controls">
+    <button data-prev aria-label="Vorige 3 uur">‹</button>
+    <div class="timeline"><div class="track"></div><div class="days"></div><input type="range" min="0" max="0" value="0" aria-label="Tijdstip"></div>
+    <button data-next aria-label="Volgende 3 uur">›</button>
+  </div>
+  <div class="row2">
+    <button data-play>▶ Afspelen</button>
+    <button data-now>Nu</button>
+  </div>
+  <div class="legend" id="eu-legend"></div>
+  <div class="hint" id="eu-hint"></div>
+</main>
+
+<!-- ======================= SNEEUWRADAR ======================= -->
+<main class="tab" id="tab-radar" role="tabpanel">
+<section class="spots" aria-label="Sneeuwhoogte Les Sybelles">
+  <div class="spot" id="spot-ouillon">
+    <div class="spot-name">L'Ouillon <small>2431 m</small></div>
+    <div class="spot-main">–<span>cm</span></div>
+    <div class="spot-src">laden…</div>
+    <ul class="spot-others"></ul>
+  </div>
+  <div class="spot" id="spot-corbier">
+    <div class="spot-name">Le Corbier <small>1550 m</small></div>
+    <div class="spot-main">–<span>cm</span></div>
+    <div class="spot-src">laden…</div>
+    <ul class="spot-others"></ul>
+  </div>
+</section>
+
+<details class="lifts" id="lifts">
+  <summary>
+    <div>
+      <div>Liften open: <span class="count" id="lift-count">–</span> · Pistes: <span class="count" id="piste-count">–</span></div>
+      <div class="levels" id="piste-levels"></div>
+      <div class="sub" id="lift-sub">laden…</div>
+    </div>
+    <span class="more" id="lift-more" hidden>toon</span>
+  </summary>
+  <h3>Liften open</h3>
+  <ul id="lift-list"></ul>
+  <h3>Pistes open</h3>
+  <ul id="piste-list"></ul>
+</details>
+
+<div class="mapwrap" id="mapwrap">
+  <div class="map" id="map">
+    <img src="https://static.wintersport.nl/images/bg-map-alps.jpg" alt="Kaart van de Alpen">
+    <img class="layer" id="radar" alt="" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <img src="https://static.wintersport.nl/images/bg-map-overlay.png" alt="">
+    <div class="dot" id="dot"><span>Les Sybelles</span></div>
+  </div>
+  <div class="status" id="status" hidden></div>
+</div>
+
+<div class="time">
+  <div>
+    <div class="when" data-when>–</div>
+    <div class="rel" id="rel">sneeuw- en regenval per 3 uur</div>
+  </div>
+  <span class="chip" data-chip hidden>nu</span>
+</div>
+
+<div class="controls">
+  <button data-prev aria-label="Vorige 3 uur">‹</button>
+  <div class="timeline"><div class="track"></div><div class="days"></div><input type="range" min="0" max="0" value="0" aria-label="Tijdstip"></div>
+  <button data-next aria-label="Volgende 3 uur">›</button>
+</div>
+<div class="row2">
+  <button data-play>▶ Afspelen</button>
+  <button data-now>Nu</button>
+  <button id="zoom">Zoom Sybelles</button>
+</div>
+
+<div class="legend">
+  <span class="lbl">Sneeuw cm</span>
+  <div class="scale" data-scale="snow"></div>
+  <span class="lbl">Regen mm</span>
+  <div class="scale" data-scale="rain"></div>
+</div>
+
+<details class="history" id="history">
+  <summary>Terugkijken <small id="hist-range">archief laden…</small></summary>
+  <div class="hist-body">
+    <div class="strip" id="hist-strip" aria-label="Sneeuw per dag op Les Sybelles"></div>
+    <div class="strip-lbl" id="hist-strip-lbl"></div>
+    <div class="hist-nav">
+      <button id="hist-prevday" aria-label="Vorige dag">‹ dag</button>
+      <input type="date" id="hist-date" aria-label="Datum">
+      <button id="hist-nextday" aria-label="Volgende dag">dag ›</button>
+    </div>
+    <div class="mapwrap" id="histwrap">
+      <div class="map">
+        <img src="https://static.wintersport.nl/images/bg-map-alps.jpg" alt="Kaart van de Alpen">
+        <img class="layer" id="hist-img" alt="">
+        <img src="https://static.wintersport.nl/images/bg-map-overlay.png" alt="">
+        <div class="dot" id="hist-dot"><span>Les Sybelles</span></div>
+      </div>
+      <div class="status" id="hist-status" hidden></div>
+    </div>
+    <div class="time">
+      <div>
+        <div class="when" id="hist-when">–</div>
+        <div class="rel" id="hist-rel"></div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="hist-back" aria-label="3 uur terug">‹</button>
+      <div class="timeline hist"><div class="track"></div><div class="days"></div><input type="range" id="hist-slider" min="0" max="0" value="0" aria-label="Tijdstip op deze dag"></div>
+      <button id="hist-fwd" aria-label="3 uur verder">›</button>
+    </div>
+    <div class="hint" id="hist-hint">Radarkaarten van de afgelopen 2 maanden, per 3 uur. Ze komen uit het online archief, dat elke 3 uur automatisch wordt bijgewerkt, aangevuld met wat de app zelf op deze telefoon bewaart.</div>
+  </div>
+</details>
+</main>
+
+<footer>
+  Kaarten: weermodel van <a href="https://www.wintersport.nl/weersneeuw/sneeuwradar" target="_blank" rel="noopener">wintersport.nl</a>. De tijdbalk kleurt naar de verwachte neerslag op Les Sybelles.
+  Sneeuw en liften: <a href="https://www.sybelles.ski/" target="_blank" rel="noopener">sybelles.ski</a> (Lumiplan), <a href="https://www.bergfex.com/le-corbier/schneebericht/" target="_blank" rel="noopener">bergfex</a>, skiresort.info, snow-forecast.com en skipass.com.
+  Weerbeeld: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. Ververst automatisch. <span id="checked"></span>
+</footer>
+
+<script>
+(() => {
+  const DOMAIN = 'https://maps.nskiv.com';
+  const SYBELLES = { lat: 45.245, lon: 6.27 };
+  const STEP = 3, MAXH = 144, TZ = 'Europe/Paris';
+  const REGIONS = {
+    alps:   { bounds: [[43.5317, 4.98676], [48.4116, 16.5236]], ratio: 586 / 960 },
+    europe: { bounds: [[35.0537, -7.75577], [56.0863, 30.4718]], ratio: 696 / 869 },
+  };
+
+  // Legendakleuren van wintersport.nl
+  const SNOW = [[0,255,255],[0,200,255],[0,150,255],[83,129,232],[157,111,212],[215,89,243],[240,134,98],[255,165,0],[255,85,0],[255,0,0]];
+  const SNOW_LBL = ['1','5','10','15','20','30','40','50','75','100+'];
+  const SNOW_MID = [2, 7, 12, 17, 25, 35, 45, 62, 87, 110]; // schatting cm per klasse, voor optellen
+  const RAIN = [[214,221,235],[189,205,224],[159,176,206],[133,155,194],[110,134,180],[89,115,162],[73,94,133]];
+  const RAIN_LBL = ['1','5','10','20','30','60','120+'];
+  const T850 = [[0,0,0],[44,17,104],[21,40,126],[17,44,130],[12,49,134],[8,53,138],[4,58,143],[29,82,165],[55,106,187],[80,130,210],[106,154,232],[132,179,255],[169,200,233],[207,222,212],[245,244,191],[244,234,180],[244,216,159],[243,189,127],[243,171,106],[242,125,53],[241,80,0]];
+  const T850_VAL = [-20,-15,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,5,8,10,15,20];
+  const WIND = [[194,255,255],[146,253,255],[247,252,168],[255,204,147],[253,152,96],[255,101,42],[253,53,0],[206,50,0],[202,0,0]];
+  const WIND_LBL = ['0-2','3-5','6','7','8','9','10','11','12'];
+  const JET = [[255,247,0],[255,151,0],[255,46,0],[243,0,0],[191,0,0],[175,54,54],[209,131,131],[235,188,188],[245,209,209]];
+  const JET_LBL = ['100','130','160','190','220','250','280','310','340'];
+
+  const LAYERS = {
+    precip:    { tpl: 'se', legend: [['Sneeuw cm', SNOW, SNOW_LBL], ['Regen mm', RAIN, RAIN_LBL]], hint: 'Sneeuw- en regenval per 3 uur. Volg de velden: waar komt de neerslag vandaan en blijft hij boven de blauwe stip hangen?' },
+    temp850:   { tpl: 'e', legend: [['°C 1500 m', T850, T850_VAL.map(v => v)]], hint: 'Temperatuur op ongeveer 1500 m (850 hPa). Rond –2 °C of kouder sneeuwt het tot Le Corbier; bij –4 tot –8 °C valt er lichte poedersneeuw.' },
+    wind:      { tpl: 'e', legend: [['Beaufort', WIND, WIND_LBL]], hint: 'Windkracht. De windrichting staat in het weerbeeld hierboven.' },
+    jetstream: { tpl: 'e', legend: [['km/u', JET, JET_LBL]], hint: 'Straalstroom op ongeveer 9 km hoogte. Hij stuurt de lagedrukgebieden: ligt hij van west of zuidwest richting de Alpen, dan komen er storingen naar Les Sybelles.' },
+  };
+
+  const $ = id => document.getElementById(id);
+  const $$ = sel => [...document.querySelectorAll(sel)];
+  let run = null, frames = [], idx = 0, timer = null, lastTouch = 0, zoomed = false, euLayer = 'precip';
+
+  // --- positie Les Sybelles (Mercator, zelfde formule als wintersport.nl) ---
+  const merc = lat => Math.atanh(Math.sin(lat * Math.PI / 180));
+  function place(region, lat, lon) {
+    const { bounds: B, ratio } = REGIONS[region];
+    const span = B[1][1] - B[0][1];
+    const x = (lon - B[0][1]) / span;
+    const k = 360 / (2 * Math.PI * span);
+    const y = 1 - k * (merc(lat) - merc(B[0][0])) / ratio;
+    return { x, y };
+  }
+  const p = place('alps', SYBELLES.lat, SYBELLES.lon);
+  const pe = place('europe', SYBELLES.lat, SYBELLES.lon);
+  $('dot').style.left = (p.x * 100) + '%';  $('dot').style.top = (p.y * 100) + '%';
+  $('eudot').style.left = (pe.x * 100) + '%'; $('eudot').style.top = (pe.y * 100) + '%';
+
+  // --- legenda's ---
+  function fillScale(el, colors, labels, small) {
+    el.innerHTML = colors.map((c, i) => {
+      const dark = (c[0] * 299 + c[1] * 587 + c[2] * 114) / 1000 < 110;
+      return `<i style="background:rgb(${c.join(',')});${dark ? 'color:#fff' : ''}">${labels[i]}</i>`;
+    }).join('');
+    if (small) el.classList.add('small');
+  }
+  fillScale(document.querySelector('[data-scale=snow]'), SNOW, SNOW_LBL);
+  fillScale(document.querySelector('[data-scale=rain]'), RAIN, RAIN_LBL);
+  function drawEuLegend() {
+    const L = LAYERS[euLayer], box = $('eu-legend');
+    box.innerHTML = '';
+    L.legend.forEach(([lbl, cols, labels]) => {
+      const s = document.createElement('span'); s.className = 'lbl'; s.textContent = lbl;
+      const d = document.createElement('div'); d.className = 'scale';
+      fillScale(d, cols, labels, cols.length > 12);
+      box.append(s, d);
+    });
+    $('eu-hint').textContent = L.hint + ' De kaart loopt tot de kust van Portugal; verder de oceaan op rekent dit model niet.';
+  }
+
+  // --- tijd ---
+  const fmtDay = new Intl.DateTimeFormat('nl-NL', { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'short' });
+  const fmtWd = new Intl.DateTimeFormat('nl-NL', { timeZone: TZ, weekday: 'short' });
+  const fmtWdLong = new Intl.DateTimeFormat('nl-NL', { timeZone: TZ, weekday: 'long' });
+  const fmtHour = new Intl.DateTimeFormat('nl-NL', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
+  const fmtH = new Intl.DateTimeFormat('nl-NL', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' });
+  const fmtDate = new Intl.DateTimeFormat('nl-NL', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const fmtShort = new Intl.DateTimeFormat('nl-NL', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short' });
+  const fmtMonth = new Intl.DateTimeFormat('nl-NL', { timeZone: TZ, month: 'short' });
+  const fmtParts = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const parisParts = d => { const o = {}; fmtParts.formatToParts(d).forEach(p => { o[p.type] = p.value; }); return o; };
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}_${pad(d.getUTCHours())}`;
+  function dayPart(d) {
+    const h = +fmtH.format(d);
+    const part = h < 6 ? 'nacht' : h < 12 ? 'ochtend' : h < 18 ? 'middag' : 'avond';
+    return `${fmtWdLong.format(d)}${part}`;
+  }
+
+  function buildFrames(r) {
+    const base = new Date(`${r.date}T${r.hour}:00:00Z`).getTime() + 6 * 3600e3;
+    const out = [];
+    for (let h = STEP; h <= MAXH; h += STEP) {
+      const end = new Date(base + h * 3600e3), start = new Date(end - STEP * 3600e3);
+      out.push({ h, start, end, here: undefined, t850: undefined });
+    }
+    return out;
+  }
+  function layerUrl(region, layer, f) {
+    const name = LAYERS[layer]?.tpl === 'e' ? stamp(f.end) : `${stamp(f.start)}_${stamp(f.end)}`;
+    return `${DOMAIN}/${region}/${layer}/${run.date}_${run.hour}/${name}.png`;
+  }
+  function currentIndex() {
+    const now = Date.now();
+    const i = frames.findIndex(f => now >= f.start && now < f.end);
+    if (i >= 0) return i;
+    return now < frames[0]?.start ? 0 : frames.length - 1;
+  }
+
+  // --- beelden laden (met CORS, zodat we de kleur op Les Sybelles kunnen uitlezen) ---
+  const cache = new Map();
+  function loadImg(url) {
+    if (cache.has(url)) return cache.get(url);
+    const pr = new Promise(res => {
+      const im = new Image();
+      im.crossOrigin = 'anonymous'; im.referrerPolicy = 'no-referrer';
+      im.onload = () => res(im); im.onerror = () => res(null);
+      im.src = url;
+    });
+    cache.set(url, pr); return pr;
+  }
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const dist = (r, g, b, c) => (c[0]-r)**2 + (c[1]-g)**2 + (c[2]-b)**2;
+  function nearest(r, g, b, pal) {
+    let best = -1, bd = 1e9;
+    pal.forEach((c, i) => { const d = dist(r, g, b, c); if (d < bd) { bd = d; best = i; } });
+    return { i: best, d: bd };
+  }
+  function pixels(im, pt, R) {
+    const W = im.naturalWidth, H = im.naturalHeight;
+    canvas.width = W; canvas.height = H;
+    ctx.clearRect(0, 0, W, H); ctx.drawImage(im, 0, 0);
+    const cx = Math.round(pt.x * W), cy = Math.round(pt.y * H);
+    try { return ctx.getImageData(cx - R, cy - R, 2 * R + 1, 2 * R + 1).data; } catch (e) { return null; }
+  }
+  // Neerslagkleur onder Les Sybelles -> legendaklasse (zwaarste neerslag in een klein rondje)
+  function classify(im) {
+    const data = pixels(im, p, 3);
+    if (!data) return undefined;
+    let snow = -1, rain = -1;
+    for (let k = 0; k < data.length; k += 4) {
+      if (data[k + 3] < 120) continue;
+      const s = nearest(data[k], data[k+1], data[k+2], SNOW), w = nearest(data[k], data[k+1], data[k+2], RAIN);
+      if (s.d <= w.d && s.d < 2500) snow = Math.max(snow, s.i);
+      else if (w.d < 2500) rain = Math.max(rain, w.i);
+    }
+    if (snow >= 0) return { kind: 'snow', i: snow };
+    if (rain >= 0) return { kind: 'rain', i: rain };
+    return null;
+  }
+  // Temperatuur op 1500 m onder Les Sybelles (Europa-kaart)
+  function readT850(im) {
+    const data = pixels(im, pe, 0);
+    if (!data || data[3] < 120) return null;
+    const n = nearest(data[0], data[1], data[2], T850);
+    return n.d < 3000 ? T850_VAL[n.i] : null;
+  }
+  const colorOf = c => c ? `rgb(${(c.kind === 'snow' ? SNOW : RAIN)[c.i].join(',')})` : '';
+  const labelOf = c => !c ? 'droog op Les Sybelles' : c.kind === 'snow' ? `Les Sybelles: ${SNOW_LBL[c.i]} cm sneeuw` : `Les Sybelles: ${RAIN_LBL[c.i]} mm regen`;
+
+  function drawTracks() {
+    $$('.timeline:not(.hist)').forEach(tl => {
+      const track = tl.querySelector('.track'), days = tl.querySelector('.days');
+      track.innerHTML = ''; days.innerHTML = '';
+      frames.forEach((f, i) => {
+        const seg = document.createElement('i');
+        if (f.here === undefined) seg.className = 'loading';
+        else if (f.here) seg.style.background = colorOf(f.here);
+        if (i > 0 && +fmtH.format(f.start) < 3) {
+          seg.classList.add('day');
+          const lbl = document.createElement('span');
+          lbl.textContent = fmtWd.format(f.start);
+          lbl.style.left = (i / frames.length * 100) + '%';
+          days.appendChild(lbl);
+        }
+        track.appendChild(seg);
+      });
+    });
+  }
+  let sampling = 0;
+  async function sampleAll() {
+    const token = ++sampling;
+    const order = frames.map((f, i) => i).sort((a, b) => Math.abs(a - idx) - Math.abs(b - idx));
+    let n = 0;
+    for (const i of order) {
+      if (token !== sampling) return;
+      const f = frames[i];
+      if (f.here !== undefined) continue;
+      const res = await loadBlobImg(layerUrl('alps', 'precip', f));
+      f.here = res ? classify(res.im) : null;
+      if (res) { URL.revokeObjectURL(res.u); archivePut(f, res.blob); }
+      if (++n % 6 === 0) drawTracks();
+      if (i === idx) showHere();
+    }
+    drawTracks(); showHere();
+    archivePrune().then(loadHistoryIndex);
+    // temperatuur op 1500 m, alleen nodig als terugval voor het weerbeeld
+    if (!omData) {
+      for (const f of frames) {
+        if (token !== sampling) return;
+        const im = await loadImg(layerUrl('europe', 'temp850', f));
+        f.t850 = im ? readT850(im) : null;
+      }
+    }
+    if (!omData) renderSummary();
+  }
+
+  // --- tonen ---
+  function showHere() {
+    const f = frames[idx]; if (!f) return;
+    $('rel').textContent = f.here === undefined ? 'sneeuw- en regenval per 3 uur' : labelOf(f.here);
+    $('eu-rel').textContent = f.here === undefined ? '' : labelOf(f.here);
+  }
+  function show(i) {
+    if (!frames.length) return;
+    idx = Math.max(0, Math.min(frames.length - 1, i));
+    const f = frames[idx];
+    $$('.timeline:not(.hist) input').forEach(s => { s.value = idx; });
+    $('radar').src = layerUrl('alps', 'precip', f);
+    if (!$('tab-weer').hidden) $('eulayer').src = layerUrl('europe', euLayer, f);
+    const day = fmtDay.format(f.start);
+    $$('[data-when]').forEach(el => { el.textContent = `${day[0].toUpperCase()}${day.slice(1)} · ${fmtHour.format(f.start)}–${fmtHour.format(f.end)}`; });
+    const now = Date.now();
+    $$('[data-chip]').forEach(chip => {
+      chip.hidden = false;
+      if (now >= f.start && now < f.end) { chip.textContent = 'nu'; chip.className = 'chip'; }
+      else if (f.end <= now) { chip.textContent = 'verleden'; chip.className = 'chip past'; }
+      else {
+        const hrs = Math.round((f.start - now) / 3600e3);
+        chip.textContent = hrs < 24 ? `over ${hrs} u` : `over ${Math.round(hrs / 24)} d`;
+        chip.className = 'chip';
+      }
+    });
+    showHere();
+    const next = frames[(idx + 1) % frames.length];
+    loadImg(layerUrl('alps', 'precip', next));
+    if (!$('tab-weer').hidden) loadImg(layerUrl('europe', euLayer, next));
+  }
+  [['radar', 'status'], ['eulayer', 'eustatus']].forEach(([img, st]) => {
+    $(img).addEventListener('error', () => { $(img).classList.add('hidden'); $(st).textContent = 'Geen beeld voor dit tijdstip'; $(st).hidden = false; });
+    $(img).addEventListener('load', () => { $(img).classList.remove('hidden'); $(st).hidden = true; });
+  });
+
+  // --- welk modelrun is actueel? ---
+  async function fetchRun() {
+    try {
+      const r = await fetch(`${DOMAIN}/alps/current_run_18.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!r.ok) throw 0;
+      const j = await r.json();
+      if (j.rundate) return { date: j.rundate, hour: j.rundir || '18' };
+    } catch (e) { /* val terug op zoeken */ }
+    for (let d = 0; d <= 3; d++) {
+      const day = new Date(Date.now() - d * 86400e3);
+      const cand = { date: day.toISOString().slice(0, 10), hour: '18' };
+      if (new Date(`${cand.date}T18:00:00Z`) > Date.now()) continue;
+      const prev = run; run = cand;
+      const ok = await loadImg(layerUrl('alps', 'precip', buildFrames(cand)[0]));
+      run = prev;
+      if (ok) return cand;
+    }
+    return null;
+  }
+
+  async function refreshRadar(forceNow) {
+    const r = await fetchRun();
+    $('checked').textContent = `Laatst gecontroleerd ${fmtHour.format(new Date())}.`;
+    if (!r) { if (!run) { $('status').textContent = 'Kan het weermodel niet bereiken. Probeer het later opnieuw.'; $('status').hidden = false; } return; }
+    const changed = !run || r.date !== run.date || r.hour !== run.hour;
+    if (changed) {
+      run = r;
+      frames = buildFrames(r);
+      $$('.timeline:not(.hist) input').forEach(s => { s.max = frames.length - 1; });
+      $('run').textContent = `model ${r.date.slice(8, 10)}-${r.date.slice(5, 7)} ${r.hour}:00 UTC`;
+    }
+    if (changed || forceNow || (!timer && Date.now() - lastTouch > 5 * 60e3)) show(currentIndex());
+    if (changed) { drawTracks(); sampleAll(); }
+  }
+
+  // ===================== Weerbeeld (samenvatting) =====================
+  // Cijfers per uur voor L'Ouillon en Le Corbier uit vier weermodellen (Open-Meteo, gratis, werkt rechtstreeks vanuit de browser).
+  const MODELS = [['ecmwf_ifs025', 'ECMWF'], ['icon_seamless', 'ICON'], ['gfs_seamless', 'GFS'], ['meteofrance_seamless', 'Météo-France']];
+  const PLACES = [{ key: 'ouillon', lat: 45.2283, lon: 6.2580, elev: 2431 }, { key: 'corbier', lat: 45.2406, lon: 6.2560, elev: 1550 }];
+  const OM_URL = 'https://api.open-meteo.com/v1/forecast'
+    + `?latitude=${PLACES.map(x => x.lat)}&longitude=${PLACES.map(x => x.lon)}&elevation=${PLACES.map(x => x.elev)}`
+    + '&hourly=precipitation,snowfall,temperature_850hPa,wind_direction_700hPa,wind_speed_700hPa,freezing_level_height'
+    + `&models=${MODELS.map(m => m[0])}&timezone=UTC&forecast_days=7`;
+  let omData = null, omTime = null;
+
+  async function fetchOpenMeteo() {
+    try {
+      const ctrl = new AbortController(); setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch(OM_URL, { signal: ctrl.signal });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      omData = Array.isArray(j) ? j : [j]; omTime = new Date();
+    } catch (e) { /* terugval op de kaarten */ }
+  }
+
+  const SECTORS = ['noord', 'noordoost', 'oost', 'zuidoost', 'zuid', 'zuidwest', 'west', 'noordwest'];
+  const sectorOf = deg => SECTORS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+  const EFFECT = {
+    noord: 'Noordelijke stroming: koude lucht, meestal weinig neerslag. Wel goed om gevallen sneeuw vast te houden.',
+    noordoost: 'Noordoostelijke stroming: droge, koude lucht. Weinig kans op sneeuw.',
+    oost: "Oostelijke stroming (retour d'est): vochtige lucht vanuit Italië. Vooral Haute-Maurienne krijgt veel; Les Sybelles krijgt een deel, het meest rond Saint-Sorlin.",
+    zuidoost: "Zuidoostelijke stroming (retour d'est): Haute-Maurienne krijgt de meeste sneeuw; Les Sybelles krijgt een deel.",
+    zuid: 'Zuidelijke stroming: föhn-achtig. De meeste neerslag valt aan de Italiaanse kant; Les Sybelles blijft vaak droog en zacht.',
+    zuidwest: 'Zuidwestelijke stroming: vochtige lucht van de oceaan en de Middellandse Zee, vaak de beste aanvoer voor Les Sybelles. Let wel op de sneeuwgrens.',
+    west: 'Westelijke stroming: Atlantisch vocht. Belledonne vangt een deel af, maar het levert vaak goede sneeuw.',
+    noordwest: 'Noordwestelijke stroming: koud en buiig. Belledonne vangt een deel af, dus Les Sybelles krijgt minder dan de Voor-Alpen.',
+  };
+
+  // Sneeuw in cm uit neerslag, nulgradengrens en temperatuur op 1500 m
+  function snowCm(mm, fl, t850, elev) {
+    if (!mm || mm <= 0) return 0;
+    if (fl == null && t850 != null) fl = 1500 + 154 * t850;
+    if (fl == null) return 0;
+    const snowline = fl - 300;
+    const frac = elev >= snowline + 150 ? 1 : elev >= snowline - 150 ? 0.5 : 0;
+    const ratio = t850 != null && t850 <= -8 ? 1.6 : t850 != null && t850 <= -4 ? 1.3 : t850 != null && t850 > -1 ? 0.8 : 1.0;
+    return mm * frac * ratio;
+  }
+  // Per uur het gemiddelde van de beschikbare modellen
+  function hourly(loc) {
+    const H = loc.hourly, out = [];
+    H.time.forEach((t, i) => {
+      const vals = key => MODELS.map(([m]) => H[`${key}_${m}`]?.[i]).filter(v => v != null);
+      const avg = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+      const pr = avg(vals('precipitation')), fl = avg(vals('freezing_level_height')), t850 = avg(vals('temperature_850hPa'));
+      const dirs = MODELS.map(([m]) => [H[`wind_direction_700hPa_${m}`]?.[i], H[`wind_speed_700hPa_${m}`]?.[i]]).filter(d => d[0] != null);
+      let sx = 0, sy = 0; dirs.forEach(([d, s]) => { sx += Math.sin(d * Math.PI / 180) * (s || 1); sy += Math.cos(d * Math.PI / 180) * (s || 1); });
+      const dir = dirs.length ? (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360 : null;
+      const spd = avg(dirs.map(d => d[1]).filter(v => v != null));
+      const sf = avg(vals('snowfall'));
+      out.push({ t: new Date(t + 'Z'), pr, fl, t850, dir, spd, sf });
+    });
+    return out;
+  }
+  function perModelSnow(loc, elev, from, to) {
+    const H = loc.hourly;
+    return MODELS.map(([m, name]) => {
+      const P = H[`precipitation_${m}`];
+      if (!P || P.every(v => v == null)) return null;
+      let s = 0, n = 0;
+      H.time.forEach((t, i) => {
+        const tt = new Date(t + 'Z');
+        if (tt < from || tt >= to) return;
+        s += snowCm(P[i], H[`freezing_level_height_${m}`]?.[i], H[`temperature_850hPa_${m}`]?.[i], elev);
+        n += H[`snowfall_${m}`]?.[i] || 0;
+      });
+      return { name, lo: Math.min(n, s), hi: Math.max(n, s), cm: (n + s) / 2 };
+    }).filter(Boolean);
+  }
+  const r5 = v => v < 1 ? '<1' : v < 10 ? Math.round(v) : Math.round(v / 5) * 5;
+  // Bandbreedte: sneeuw volgens de modellen zelf (ondergrens) tot schatting uit neerslag + sneeuwgrens (bovengrens)
+  const rng = (a, b) => { const lo = Math.min(a, b), hi = Math.max(a, b); return hi < 1 ? '<1' : (r5(lo) === r5(hi) || hi - lo < 3) ? `${r5(hi)}` : `${lo < 1 ? 0 : r5(lo)}–${r5(hi)}`; };
+
+  function setVerdict(cm) {
+    const v = $('sum-verdict');
+    const lvl = cm >= 40 ? 3 : cm >= 15 ? 2 : cm >= 3 ? 1 : 0;
+    v.textContent = ['geen sneeuw van betekenis', 'beetje sneeuw', 'flink wat sneeuw', 'veel sneeuw'][lvl];
+    v.className = `verdict v${lvl}`;
+  }
+
+  function renderSummary() {
+    const lead = $('sum-lead'), nowEl = $('sum-now'), list = $('sum-events'), models = $('sum-models'), trust = $('sum-trust'), src = $('sum-src');
+    list.innerHTML = ''; models.hidden = true; trust.textContent = '';
+    const now = new Date(), week = new Date(now.getTime() + 7 * 86400e3);
+
+    if (omData && omData.length >= 2) {
+      const ou = hourly(omData[0]), co = hourly(omData[1]);
+      const future = ou.map((h, i) => ({ ...h, cmO: snowCm(h.pr, h.fl, h.t850, 2431), cmC: snowCm(co[i]?.pr, co[i]?.fl, co[i]?.t850, 1550), sfO: h.sf || 0, sfC: co[i]?.sf || 0 })).filter(h => h.t >= now && h.t < week);
+      const cur = ou.find(h => h.t >= new Date(now.getTime() - 3600e3)) || ou[0];
+      const sum = k => future.reduce((s, h) => s + h[k], 0);
+      const totO = sum('cmO'), totC = sum('cmC'), sfO = sum('sfO'), sfC = sum('sfC');
+      setVerdict((totO + sfO) / 2);
+
+      // Per dag (Franse tijd) optellen
+      const byDay = new Map();
+      for (const h of future) {
+        const k = fmtDate.format(h.t);
+        if (!byDay.has(k)) byDay.set(k, { from: h.t, to: h.t, hours: [] });
+        const d = byDay.get(k); d.to = h.t; if ((h.pr || 0) > 0) d.hours.push(h);
+      }
+      const sig = [...byDay.values()].filter(e => e.hours.length).map(e => {
+        const pr = e.hours.reduce((s, h) => s + h.pr, 0);
+        const es = k => e.hours.reduce((s, h) => s + h[k], 0);
+        const cmO = es('cmO'), cmC = es('cmC'), sfO = es('sfO'), sfC = es('sfC');
+        let sx = 0, sy = 0; e.hours.forEach(h => { if (h.dir != null) { sx += Math.sin(h.dir * Math.PI / 180) * h.pr; sy += Math.cos(h.dir * Math.PI / 180) * h.pr; } });
+        const dir = (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
+        const fls = e.hours.map(h => h.fl).filter(v => v != null);
+        const fl = fls.length ? fls.reduce((s, v) => s + v, 0) / fls.length : null;
+        const t850 = Math.min(...e.hours.map(h => h.t850 ?? 99));
+        return { ...e, pr, cmO, cmC, sfO, sfC, dir, fl, t850 };
+      }).filter(e => e.pr >= 2);
+
+      // Kopregel
+      const best = sig.slice().sort((a, b) => (b.cmO + b.sfO) - (a.cmO + a.sfO))[0];
+      if (Math.max(totO, sfO) < 1) lead.textContent = 'De komende 7 dagen wordt er geen sneeuw van betekenis verwacht in Les Sybelles.';
+      else lead.textContent = `Komende 7 dagen naar verwachting ${rng(sfO, totO)} cm verse sneeuw op L'Ouillon en ${rng(sfC, totC)} cm in Le Corbier.`
+        + (best && best.cmO >= 3 ? ` Het meeste valt op ${fmtWdLong.format(best.from)}.` : '');
+
+      // Nu
+      const sec = cur.dir != null ? sectorOf(cur.dir) : null;
+      nowEl.innerHTML = `<b>Nu:</b> ${sec ? `${sec}elijke stroming op 3 km hoogte (${Math.round(cur.spd || 0)} km/u)` : 'stroming onbekend'}`
+        + `${cur.t850 != null ? `, ${Math.round(cur.t850)} °C op 1500 m` : ''}${cur.fl != null ? `, nulgradengrens rond ${Math.round(cur.fl / 100) * 100} m` : ''}. `
+        + (sec ? EFFECT[sec] : '');
+
+      // Periodes
+      let prevS = sec;
+      sig.forEach(e => {
+        const li = document.createElement('li');
+        const s = sectorOf(e.dir);
+        const sl = e.fl != null ? Math.max(0, Math.round((e.fl - 300) / 100) * 100) : null;
+        const kind = Math.max(e.cmO, e.sfO) < 1 ? `vooral regen (${Math.round(e.pr)} mm)` : `${rng(e.sfO, e.cmO)} cm op L'Ouillon, ${rng(e.sfC, e.cmC)} cm in Le Corbier`;
+        li.innerHTML = `<b>${cap(fmtWdLong.format(e.from))}:</b> ${kind}. `
+          + `${cap(s)}enwind${sl != null ? `, sneeuwgrens rond ${sl} m` : ''}${e.t850 < 99 ? `, koudste moment ${Math.round(e.t850)} °C op 1500 m` : ''}. `
+          + (sl != null && sl > 1550 && e.cmO >= 1 ? (Math.max(e.cmC, e.sfC) < 1 ? 'In Le Corbier valt het vooral als regen. ' : 'In Le Corbier deels regen. ') : '')
+          + (s !== prevS ? cap(EFFECT[s].slice(EFFECT[s].indexOf(':') + 1).trim()) : '');
+        prevS = s;
+        list.appendChild(li);
+      });
+      if (!sig.length && totO < 1) {
+        const li = document.createElement('li');
+        li.textContent = 'Geen neerslagperiodes van betekenis in de modellen.';
+        list.appendChild(li);
+      }
+
+      // Modellen naast elkaar
+      const pm = perModelSnow(omData[0], 2431, now, week);
+      if (pm.length) {
+        models.innerHTML = pm.map(m => `<div>${m.name}<b>${rng(m.lo, m.hi)}</b>cm</div>`).join('');
+        models.hidden = false;
+        const vals = pm.map(m => m.cm), mx = Math.max(...vals), mn = Math.min(...vals);
+        trust.textContent = mx < 3 ? 'Alle modellen houden het droog: dat is vrij zeker.'
+          : mx - mn <= Math.max(8, 0.35 * mx) ? 'De modellen zijn het redelijk eens, dus de verwachting is vrij betrouwbaar.'
+          : `De modellen verschillen nog flink (${r5(mn)} tot ${r5(mx)} cm op L'Ouillon). Houd de komende dagen in de gaten.`;
+      }
+      src.textContent = `Berekend in de app uit 4 weermodellen via Open-Meteo, met de vuistregels voor Les Sybelles. Sneeuw staat als bandbreedte: de laagste waarde is wat de modellen zelf als sneeuw rekenen, de hoogste is een schatting uit neerslag en sneeuwgrens op die hoogte. Verse sneeuw zakt in, dus de sneeuwhoogte groeit minder hard. Bijgewerkt ${fmtHour.format(omTime)}.`;
+      return;
+    }
+
+    // ---- Terugval: alleen de kaarten van wintersport.nl ----
+    if (!frames.length || frames.every(f => f.here === undefined)) { lead.textContent = 'De samenvatting wordt berekend…'; return; }
+    const fut = frames.filter(f => f.end > now);
+    const tot = fut.reduce((s, f) => s + (f.here?.kind === 'snow' ? SNOW_MID[f.here.i] : 0), 0);
+    setVerdict(tot);
+    const snowy = fut.filter(f => f.here?.kind === 'snow');
+    lead.textContent = tot < 1 ? 'Het model van wintersport.nl laat de komende 6 dagen geen sneeuw zien op Les Sybelles.'
+      : `Het model van wintersport.nl laat de komende 6 dagen ruwweg ${r5(tot)} cm sneeuw zien op Les Sybelles, vooral ${dayPart(snowy.sort((a, b) => SNOW_MID[b.here.i] - SNOW_MID[a.here.i])[0].start)}.`;
+    const cur = frames[currentIndex()];
+    nowEl.innerHTML = cur?.t850 != null ? `<b>Nu:</b> ongeveer ${cur.t850} °C op 1500 m. ${cur.t850 <= -2 ? 'Koud genoeg voor sneeuw tot Le Corbier.' : cur.t850 <= 2 ? 'Sneeuw vooral hogerop; rond Le Corbier kan het nat worden.' : 'Te zacht voor sneeuw in het dorp.'}` : '';
+    src.textContent = 'De uitgebreide modeldata (Open-Meteo) was niet bereikbaar. Dit is een ruwe schatting uit de kleuren van de kaarten, zonder windrichting.';
+  }
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  async function refreshWeather() { await fetchOpenMeteo(); renderSummary(); }
+
+  // ===================== Sneeuwhoogte & liften =====================
+  const num = s => { const n = parseFloat(String(s).replace(',', '.')); return isFinite(n) ? Math.round(n) : null; };
+  async function getDoc(path) {
+    // Op Netlify via de eigen proxy (_redirects); elders uit het GitHub-archief, dat de pagina's elk uur ophaalt.
+    // bergfex weigert automatische verzoeken en is daarom alleen via Netlify beschikbaar.
+    const viaNetlify = location.hostname.endsWith('netlify.app');
+    const url = path.startsWith('/bron/') && !viaNetlify ? `${ARCHIVE}${path.slice(1)}.html` : path;
+    const r = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+    doc.querySelectorAll('script,style,noscript').forEach(e => e.remove());
+    return doc;
+  }
+  const textOf = doc => (doc.body ? doc.body.textContent : '').replace(/ /g, ' ').replace(/\s+/g, ' ');
+
+  const SOURCES = [
+    { key: 'lumiplan', name: 'sybelles.ski', lead: 1, async get() {
+        const doc = await getDoc('/bron/lumiplan');
+        const out = {};
+        doc.querySelectorAll('.card').forEach(card => {
+          const head = (card.querySelector('.card-header')?.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+          const which = head.includes('OUILLON') ? 'ouillon' : head.includes('CORBIER') ? 'corbier' : null;
+          if (!which || out[which]) return;
+          const img = card.querySelector('img[title*="auteur de neige" i]:not([title*="dernière" i])') || card.querySelector('img[title^="Cumul de neige" i]');
+          const val = img?.parentElement?.querySelector('.subtext .bold')?.textContent;
+          const alt = num((head.match(/(\d{3,4})\s*M/) || [])[1]);
+          if (val != null && val.trim() !== '') out[which] = { cm: num(val), alt };
+        });
+        const upd = doc.querySelector('.intro_maj')?.textContent.trim();
+        if (upd) out.note = upd.replace('Mise à jour le', 'bijgewerkt').replace(' à ', ' ');
+        return out;
+      } },
+    { key: 'bergfex', name: 'bergfex', lead: 2, async get() {
+        const t = textOf(await getDoc('/bron/bergfex'));
+        const out = {};
+        const m = t.match(/Mountain\s*\(([^)]*)\)\s*(\d+)\s*cm/i), v = t.match(/Valley\s*\(([^)]*)\)\s*(\d+)\s*cm/i);
+        const altOf = s => num((s.match(/([\d.,]{3,6})\s*m/) || [])[1]?.replace(/[.,]/g, ''));
+        if (m) out.ouillon = { cm: num(m[2]), alt: altOf(m[1]) };
+        if (v) out.corbier = { cm: num(v[2]), alt: altOf(v[1]) };
+        const l = t.match(/Open lifts\s*(\d+)\s*of\s*(\d+)/i);
+        if (l) out.lifts = { open: +l[1], total: +l[2] };
+        return out;
+      } },
+    { key: 'skiresort', name: 'skiresort.info', async get() {
+        const t = textOf(await getDoc('/bron/skiresort'));
+        const out = {};
+        const m = t.match(/(\d+)\s*cm\s*Mountain\s*\((\d+)\s*m\)/i), b = t.match(/(\d+)\s*cm\s*Base\s*\((\d+)\s*m\)/i);
+        if (m) out.ouillon = { cm: num(m[1]), alt: num(m[2]) };
+        if (b) out.corbier = { cm: num(b[1]), alt: num(b[2]) };
+        return out;
+      } },
+    { key: 'snowforecast', name: 'snow-forecast', async get() {
+        const t = textOf(await getDoc('/bron/snowforecast'));
+        const out = {};
+        const m = t.match(/Top snow depth:\s*([\d.]+)\s*cm/i), b = t.match(/Bottom snow depth:\s*([\d.]+)\s*cm/i);
+        if (m) out.ouillon = { cm: num(m[1]) };
+        if (b) out.corbier = { cm: num(b[1]) };
+        return out;
+      } },
+    { key: 'skipass', name: 'skipass', async get() {
+        const t = textOf(await getDoc('/bron/skipass'));
+        const out = {};
+        let m = t.match(/en haut des pistes[^.]*?(\d+)\s*cm[^.]*?(\d+)\s*cm en bas/i);
+        if (m) { out.ouillon = { cm: num(m[1]) }; out.corbier = { cm: num(m[2]) }; }
+        else if ((m = t.match(/Enneigement du [^0-9]*\d+[^0-9]+?(\d+)\s*cm à (\d+)\s*m\s*(\d+)\s*cm à (\d+)\s*m/i))) {
+          out.ouillon = { cm: num(m[1]), alt: num(m[2]) }; out.corbier = { cm: num(m[3]), alt: num(m[4]) };
+        }
+        return out;
+      } },
+  ];
+
+  function renderSpot(which, results) {
+    const el = $(`spot-${which}`);
+    const have = results.filter(r => r.data?.[which] && r.data[which].cm != null);
+    const leads = have.filter(r => r.src.lead).sort((a, b) => a.src.lead - b.src.lead);
+    const main = leads[0] || have[0];
+    const mainEl = el.querySelector('.spot-main'), srcEl = el.querySelector('.spot-src'), list = el.querySelector('.spot-others');
+    list.innerHTML = '';
+    if (!main) {
+      mainEl.innerHTML = '–<span>cm</span>';
+      srcEl.textContent = results.length ? 'geen meting beschikbaar' : 'laden…';
+      return;
+    }
+    mainEl.innerHTML = `${main.data[which].cm}<span>cm</span>`;
+    srcEl.innerHTML = leads.map(r => `${r.src.name} <b>${r.data[which].cm}</b>`).join(' · ') || `${main.src.name}`;
+    for (const r of results) {
+      if (r.src.lead) continue;
+      const li = document.createElement('li');
+      const d = r.data?.[which];
+      li.innerHTML = `<span>${r.src.name}${d?.alt ? ` <small>${d.alt} m</small>` : ''}</span><b>${d && d.cm != null ? d.cm + ' cm' : r.error ? 'niet bereikbaar' : '–'}</b>`;
+      list.appendChild(li);
+    }
+    for (const r of results) {
+      if (!r.src.lead || (r.data?.[which]?.cm != null)) continue;
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${r.src.name}</span><b>${r.error ? 'niet bereikbaar' : '–'}</b>`;
+      list.prepend(li);
+    }
+  }
+
+  async function refreshSnow() {
+    const results = await Promise.all(SOURCES.map(async src => {
+      try { return { src, data: await src.get() }; }
+      catch (e) { return { src, error: true }; }
+    }));
+    renderSpot('ouillon', results);
+    renderSpot('corbier', results);
+    const bf = results.find(r => r.src.key === 'bergfex')?.data?.lifts;
+    return { bergfexLifts: bf, note: results.find(r => r.src.key === 'lumiplan')?.data?.note };
+  }
+
+  const LUMI = 'https://public.lumiplay.link/interactive-map/v1/map/7a6ed0ee-a613-476a-b9b3-25444e075f16/';
+  // Liften en pistes: live status van de officiële pistekaart (Lumiplan)
+  let poi = null;
+  const LEVELS = [['GREEN', 'groen'], ['BLUE', 'blauw'], ['RED', 'rood'], ['BLACK', 'zwart']];
+  const niceName = n => { n = n.replace(/^[\d.]+\s*-\s*/, ''); return n.charAt(0) + n.slice(1).toLowerCase(); };
+  async function refreshLifts(extra) {
+    const sub = $('lift-sub'), more = $('lift-more');
+    try {
+      if (!poi) {
+        const s = await fetch(LUMI + 'staticPoiData?lang=fr').then(r => r.json());
+        poi = s.items.map(i => i.data).filter(Boolean);
+      }
+      const d = await fetch(LUMI + `dynamicPoiData?lang=fr&t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json());
+      const st = new Map(d.items.map(i => [i.id, i]));
+      const isOpen = x => { const s = st.get(x.id); return !!s && (s.openingStatus === 'OPEN' || s.operating === true); };
+      const lifts = poi.filter(x => x.type === 'LIFT');
+      const pistes = poi.filter(x => x.type === 'TRAIL' && x.trailType === 'DOWNHILL_SKIING');
+      const openL = lifts.filter(isOpen), openP = pistes.filter(isOpen);
+      const offSeason = d.items.length && d.items.every(i => i.openingStatus === 'OUT_OF_PERIOD');
+
+      $('lift-count').textContent = `${openL.length} van ${lifts.length}`;
+      $('piste-count').textContent = `${openP.length} van ${pistes.length}`;
+      $('piste-levels').innerHTML = LEVELS.map(([lv, nl]) => {
+        const all = pistes.filter(x => x.trailLevel === lv), op = all.filter(isOpen);
+        return `<span class="lv-${lv}" title="${nl}">${op.length}/${all.length}</span>`;
+      }).join('');
+
+      const parts = [offSeason ? 'buiten het seizoen' : 'live via sybelles.ski'];
+      if (extra?.bergfexLifts) parts.push(`bergfex (Le Corbier): ${extra.bergfexLifts.open} van ${extra.bergfexLifts.total} liften`);
+      if (extra?.note) parts.push(`sneeuw ${extra.note}`);
+      sub.textContent = parts.join(' · ');
+
+      $('lift-list').innerHTML = '';
+      openL.map(x => niceName(x.name)).sort((a, b) => a.localeCompare(b, 'fr'))
+        .forEach(n => { const li = document.createElement('li'); li.textContent = n; $('lift-list').appendChild(li); });
+      $('piste-list').innerHTML = '';
+      const order = { GREEN: 0, BLUE: 1, RED: 2, BLACK: 3 };
+      openP.sort((a, b) => (order[a.trailLevel] - order[b.trailLevel]) || a.name.localeCompare(b.name, 'fr'))
+        .forEach(x => { const li = document.createElement('li'); li.className = `lv lv-${x.trailLevel}`; li.textContent = niceName(x.name); $('piste-list').appendChild(li); });
+
+      const any = openL.length + openP.length > 0;
+      more.hidden = !any;
+      if (!any) $('lifts').open = false;
+    } catch (e) {
+      $('lift-count').textContent = '–'; $('piste-count').textContent = '–';
+      sub.textContent = extra?.bergfexLifts ? `bergfex (Le Corbier): ${extra.bergfexLifts.open} van ${extra.bergfexLifts.total} liften` : 'lift- en pistestatus niet bereikbaar';
+    }
+  }
+  $('lifts').addEventListener('toggle', () => { $('lift-more').textContent = $('lifts').open ? 'verberg' : 'toon'; });
+  $('lifts').addEventListener('click', e => { if ($('lift-more').hidden && e.target.closest('summary')) e.preventDefault(); });
+
+  async function refreshInfo() { refreshLifts(await refreshSnow()); }
+
+  // ===================== Radar-archief (op deze telefoon) =====================
+  async function loadBlobImg(url) {
+    try {
+      const r = await fetch(url, { referrerPolicy: 'no-referrer' });
+      if (!r.ok) return null;
+      const blob = await r.blob();
+      const u = URL.createObjectURL(blob);
+      const im = new Image();
+      await new Promise((res, rej) => { im.onload = res; im.onerror = rej; im.src = u; setTimeout(() => rej(new Error('timeout')), 20000); });
+      return { im, blob, u };
+    } catch (e) { return null; }
+  }
+  const KEEP_DAYS = 62;
+  let dbp = null;
+  function db() {
+    if (!dbp) dbp = new Promise((res, rej) => {
+      const r = indexedDB.open('sneeuwradar', 1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('meta', { keyPath: 'key' }); r.result.createObjectStore('img', { keyPath: 'key' }); };
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return dbp;
+  }
+  async function idb(stores, mode, fn) {
+    const d = await db();
+    return new Promise((res, rej) => {
+      const t = d.transaction(stores, mode);
+      const req = fn(...[].concat(stores).map(s => t.objectStore(s)));
+      t.oncomplete = () => res(req && 'result' in req ? req.result : undefined);
+      t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  }
+  async function archivePut(f, blob) {
+    try {
+      const key = stamp(f.end);
+      await idb(['meta', 'img'], 'readwrite', (m, i) => {
+        m.put({ key, start: f.start.getTime(), end: f.end.getTime(), run: `${run.date}_${run.hour}`, here: f.here ?? null });
+        i.put({ key, blob });
+      });
+    } catch (e) { /* opslag niet beschikbaar: dan geen archief */ }
+  }
+  async function archivePrune() {
+    try {
+      const limit = Date.now() - KEEP_DAYS * 86400e3;
+      const all = await idb('meta', 'readonly', m => m.getAll());
+      const old = all.filter(x => x.end < limit).map(x => x.key);
+      if (old.length) await idb(['meta', 'img'], 'readwrite', (m, i) => { old.forEach(k => { m.delete(k); i.delete(k); }); });
+    } catch (e) {}
+  }
+
+  // --- terugkijken ---
+  let hist = { meta: [], day: null, frames: [], i: 0, url: null };
+  const hp = place('alps', SYBELLES.lat, SYBELLES.lon);
+  $('hist-dot').style.left = (hp.x * 100) + '%'; $('hist-dot').style.top = (hp.y * 100) + '%';
+  const dayKey = d => { const o = parisParts(d); return `${o.year}-${o.month}-${o.day}`; };
+  // Online archief op GitHub (vult automatisch elke 3 uur, ook als de app dicht is)
+  const ARCHIVE = 'https://raw.githubusercontent.com/lndrtblm/sneeuwradar-archief/archive/';
+  async function remoteIndex() {
+    if (!ARCHIVE) return [];
+    try {
+      const j = await fetch(`${ARCHIVE}index.json?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json());
+      return Object.entries(j.frames || {}).map(([key, v]) => ({ key, ...v, remote: true }));
+    } catch (e) { return []; }
+  }
+  async function loadHistoryIndex() {
+    const now = Date.now();
+    let local = [];
+    try { local = await idb('meta', 'readonly', m => m.getAll()); } catch (e) {}
+    const remote = await remoteIndex();
+    // Samenvoegen: per tijdstip de kaart uit de nieuwste modelrun; bij gelijk de lokale (die staat al op de telefoon)
+    const merged = new Map();
+    [...remote, ...local].forEach(x => { const o = merged.get(x.key); if (!o || x.run >= o.run) merged.set(x.key, x); });
+    hist.meta = [...merged.values()].filter(x => x.start < now).sort((a, b) => a.start - b.start);
+    if (!local.length && !remote.length && !window.indexedDB) { $('hist-range').textContent = 'niet beschikbaar op dit toestel'; return; }
+    if (!hist.meta.length) { $('hist-range').textContent = 'nog leeg'; return; }
+    const first = new Date(hist.meta[0].start);
+    $('hist-range').textContent = `vanaf ${fmtShort.format(first)}`;
+    $('hist-date').min = dayKey(first); $('hist-date').max = dayKey(new Date());
+    drawStrip();
+    if (!hist.day) {
+      const y = dayKey(new Date(Date.now() - 86400e3));
+      hist.day = hist.meta.some(x => dayKey(new Date(x.start)) === y) ? y : dayKey(new Date(hist.meta[hist.meta.length - 1].start));
+    }
+    if ($('history').open) openDay(hist.day, true);
+  }
+  function drawStrip() {
+    const strip = $('hist-strip'), lbl = $('hist-strip-lbl');
+    strip.innerHTML = ''; lbl.innerHTML = '';
+    const byDay = new Map();
+    hist.meta.forEach(x => { const k = dayKey(new Date(x.start)); (byDay.get(k) || byDay.set(k, []).get(k)).push(x); });
+    const days = [];
+    for (let d = KEEP_DAYS - 2; d >= 0; d--) days.push(new Date(Date.now() - d * 86400e3));
+    days.forEach((d, n) => {
+      const k = dayKey(d), list = byDay.get(k);
+      const b = document.createElement('button');
+      b.dataset.day = k;
+      b.title = fmtShort.format(d);
+      if (!list) b.className = 'none';
+      else {
+        const snow = Math.max(-1, ...list.map(x => x.here?.kind === 'snow' ? x.here.i : -1));
+        const rain = Math.max(-1, ...list.map(x => x.here?.kind === 'rain' ? x.here.i : -1));
+        if (snow >= 0) b.style.background = `rgb(${SNOW[snow].join(',')})`;
+        else if (rain >= 0) b.style.background = `rgb(${RAIN[rain].join(',')})`;
+      }
+      if (k === hist.day) b.classList.add('sel');
+      b.onclick = () => { if (list) openDay(k); };
+      strip.appendChild(b);
+      if (parisParts(d).day === '01' || n === 0) {
+        const s = document.createElement('span');
+        s.textContent = fmtMonth.format(d);
+        s.style.left = (n / days.length * 100) + '%';
+        lbl.appendChild(s);
+      }
+    });
+  }
+  function openDay(k, keepIdx) {
+    hist.day = k;
+    $('hist-date').value = k;
+    hist.frames = hist.meta.filter(x => dayKey(new Date(x.start)) === k);
+    $$('#hist-strip button').forEach(b => b.classList.toggle('sel', b.dataset.day === k));
+    const tl = document.querySelector('.timeline.hist'), track = tl.querySelector('.track');
+    track.innerHTML = '';
+    hist.frames.forEach(x => { const seg = document.createElement('i'); if (x.here) seg.style.background = colorOf(x.here); track.appendChild(seg); });
+    $('hist-slider').max = Math.max(0, hist.frames.length - 1);
+    if (!hist.frames.length) {
+      $('hist-when').textContent = fmtDay.format(new Date(k + 'T12:00:00'));
+      $('hist-rel').textContent = 'Geen kaarten bewaard voor deze dag.';
+      $('hist-img').removeAttribute('src');
+      return;
+    }
+    showHist(keepIdx ? Math.min(hist.i, hist.frames.length - 1) : 0);
+  }
+  async function showHist(i) {
+    hist.i = Math.max(0, Math.min(hist.frames.length - 1, i));
+    const x = hist.frames[hist.i];
+    $('hist-slider').value = hist.i;
+    const s = new Date(x.start), e = new Date(x.end), day = fmtDay.format(s);
+    $('hist-when').textContent = `${cap(day)} · ${fmtHour.format(s)}–${fmtHour.format(e)}`;
+    $('hist-rel').textContent = labelOf(x.here);
+    if (x.remote) {
+      $('hist-img').src = `${ARCHIVE}radar/${x.key}.png`;
+      $('hist-status').hidden = true;
+      return;
+    }
+    try {
+      const rec = await idb('img', 'readonly', st => st.get(x.key));
+      if (hist.url) URL.revokeObjectURL(hist.url);
+      hist.url = rec?.blob ? URL.createObjectURL(rec.blob) : null;
+      if (hist.url) { $('hist-img').src = hist.url; $('hist-status').hidden = true; }
+      else { $('hist-img').removeAttribute('src'); $('hist-status').textContent = 'Beeld niet gevonden'; $('hist-status').hidden = false; }
+    } catch (err) {}
+  }
+  const shiftDay = n => {
+    if (!hist.day) return;
+    const d = new Date(hist.day + 'T12:00:00'); d.setDate(d.getDate() + n);
+    openDay(dayKey(d));
+  };
+  $('hist-prevday').onclick = () => shiftDay(-1);
+  $('hist-nextday').onclick = () => shiftDay(1);
+  $('hist-date').addEventListener('change', e => { if (e.target.value) openDay(e.target.value); });
+  $('hist-slider').addEventListener('input', e => showHist(+e.target.value));
+  $('hist-back').onclick = () => { if (hist.i > 0) showHist(hist.i - 1); else { shiftDay(-1); showHist(hist.frames.length - 1); } };
+  $('hist-fwd').onclick = () => { if (hist.i < hist.frames.length - 1) showHist(hist.i + 1); else shiftDay(1); };
+  $('history').addEventListener('toggle', () => { if ($('history').open) { drawStrip(); if (hist.day) openDay(hist.day, true); } });
+
+  // ===================== Webcam-tijdreis =====================
+  const SKAPING = 'https://skaping.s3.gra.io.cloud.ovh.net';
+  const CAMS = { ouillon: `${SKAPING}/les-sybelles/ouillon`, corbier: `${SKAPING}/le-corbier/front-de-neige/panoramique` };
+  let trCam = 'ouillon', trBack = 7, trCustom = null, trToken = 0;
+  const camUrl = (cam, d, size) => { const o = parisParts(d); return `${CAMS[cam]}/${o.year}/${o.month}/${o.day}/${size}/${o.hour}-${o.minute}.jpg`; };
+  const exists = url => new Promise(res => { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.onload = () => res(true); im.onerror = () => res(false); im.src = url; });
+  // Zoek het beeld dat het dichtst bij een tijdstip ligt (camera's fotograferen elke 10 tot 60 minuten)
+  async function findNear(cam, target, before) {
+    const t0 = Math.floor(target.getTime() / 60000);
+    const cands = [];
+    for (let m = t0 - 120; m <= t0 + 120; m++) {
+      const mm = ((m % 60) + 60) % 60;
+      if (mm % 10 > 1) continue;
+      if (before && m > Math.floor(Date.now() / 60000)) continue;
+      cands.push(m);
+    }
+    cands.sort((a, b) => Math.abs(a - t0) - Math.abs(b - t0));
+    for (let k = 0; k < cands.length; k += 8) {
+      const batch = cands.slice(k, k + 8);
+      const ok = await Promise.all(batch.map(m => exists(camUrl(cam, new Date(m * 60000), 'thumb'))));
+      const hit = batch.find((m, j) => ok[j]);
+      if (hit != null) return new Date(hit * 60000);
+    }
+    return null;
+  }
+  function refTime() {
+    // 's avonds en 's nachts: vergelijk op 12:00 uur
+    const now = new Date(), h = +parisParts(now).hour;
+    if (h >= 8 && h < 18) return now;
+    const d = new Date(now.getTime() - (h < 8 ? 86400e3 : 0));
+    return parisNoon(d);
+  }
+  function parisNoon(d) {
+    // 12:00 Franse tijd op de dag van d
+    const o = parisParts(d);
+    const guess = new Date(`${o.year}-${o.month}-${o.day}T12:00:00Z`);
+    const off = +parisParts(guess).hour - 12;
+    return new Date(guess.getTime() - off * 3600e3);
+  }
+  async function runTravel() {
+    const token = ++trToken;
+    $('cmp-busy').hidden = false;
+    const ref = refTime();
+    const thenTarget = trCustom || new Date(ref.getTime() - trBack * 86400e3);
+    const [tNow, tThen] = await Promise.all([findNear(trCam, ref, true), findNear(trCam, thenTarget, true)]);
+    if (token !== trToken) return;
+    $('cmp-busy').hidden = true;
+    if (tNow) { $('cmp-now').src = camUrl(trCam, tNow, 'small'); $('lbl-now').textContent = `${fmtShort.format(tNow)} ${fmtHour.format(tNow)}`; }
+    else $('lbl-now').textContent = 'geen beeld';
+    if (tThen) { $('cmp-then').src = camUrl(trCam, tThen, 'small'); $('lbl-then').textContent = `${fmtShort.format(tThen)} ${fmtHour.format(tThen)}`; }
+    else { $('cmp-then').removeAttribute('src'); $('lbl-then').textContent = 'geen beeld gevonden'; }
+  }
+  // Panorama: kijkrichting per camera onthouden
+  const panKey = () => `pan-${trCam}`;
+  function applyPan() {
+    let v = 50; try { v = +(localStorage.getItem(panKey()) ?? 50); } catch (e) {}
+    $('cmp-pan').value = v; $('cmp').style.setProperty('--pan', v + '%');
+  }
+  $('cmp-pan').addEventListener('input', e => {
+    $('cmp').style.setProperty('--pan', e.target.value + '%');
+    try { localStorage.setItem(panKey(), e.target.value); } catch (err) {}
+  });
+  applyPan();
+  $('cmp-pos').addEventListener('input', e => { $('cmp').style.setProperty('--pos', e.target.value + '%'); });
+  $$('#travel [data-cam]').forEach(b => b.onclick = () => {
+    trCam = b.dataset.cam;
+    $$('#travel [data-cam]').forEach(x => x.classList.toggle('on', x === b));
+    applyPan();
+    runTravel();
+  });
+  $$('#travel [data-back]').forEach(b => b.onclick = () => {
+    trBack = +b.dataset.back; trCustom = null; $('tr-when').value = '';
+    $$('#travel [data-back]').forEach(x => x.classList.toggle('on', x === b));
+    runTravel();
+  });
+  $('tr-when').addEventListener('change', e => {
+    if (!e.target.value) return;
+    trCustom = new Date(e.target.value);
+    $$('#travel [data-back]').forEach(x => x.classList.remove('on'));
+    runTravel();
+  });
+  let travelStarted = false;
+
+  // --- bediening (geldt voor beide tijdbalken) ---
+  const touch = () => { lastTouch = Date.now(); };
+  function stop() { if (timer) { clearInterval(timer); timer = null; } $$('[data-play]').forEach(b => { b.textContent = '▶ Afspelen'; b.classList.remove('on'); }); }
+  $$('.timeline:not(.hist) input').forEach(s => s.addEventListener('input', () => { touch(); stop(); show(+s.value); }));
+  $$('[data-prev]').forEach(b => b.onclick = () => { touch(); stop(); show(idx - 1); });
+  $$('[data-next]').forEach(b => b.onclick = () => { touch(); stop(); show(idx + 1); });
+  $$('[data-now]').forEach(b => b.onclick = () => { touch(); stop(); show(currentIndex()); });
+  $$('[data-play]').forEach(b => b.onclick = () => {
+    touch();
+    if (timer) return stop();
+    $$('[data-play]').forEach(x => { x.textContent = '❚❚ Pauze'; x.classList.add('on'); });
+    timer = setInterval(() => show(idx + 1 >= frames.length ? currentIndex() : idx + 1), 700);
+  });
+  $('zoom').onclick = () => {
+    zoomed = !zoomed;
+    const s = 3, map = $('map');
+    const tx = Math.min(0, Math.max(1 - s, 0.5 - p.x * s)) * 100;
+    const ty = Math.min(0, Math.max(1 - s, 0.5 - p.y * s)) * 100;
+    map.style.transform = zoomed ? `translate(${tx}%, ${ty}%) scale(${s})` : '';
+    map.classList.toggle('zoomed', zoomed);
+    $('zoom').classList.toggle('on', zoomed);
+    $('zoom').textContent = zoomed ? 'Hele Alpen' : 'Zoom Sybelles';
+    try { localStorage.setItem('zoom', zoomed ? '1' : '0'); } catch (e) {}
+  };
+  try { if (localStorage.getItem('zoom') === '1') $('zoom').onclick(); } catch (e) {}
+
+  // Kaartlaag op de Europa-kaart
+  function setLayer(name) {
+    euLayer = name;
+    $$('.seg button').forEach(b => b.classList.toggle('on', b.dataset.layer === name));
+    drawEuLegend();
+    if (frames.length && run) $('eulayer').src = layerUrl('europe', euLayer, frames[idx]);
+    try { localStorage.setItem('layer', name); } catch (e) {}
+  }
+  $$('.seg button').forEach(b => b.onclick = () => setLayer(b.dataset.layer));
+  try { const l = localStorage.getItem('layer'); if (l && LAYERS[l]) euLayer = l; } catch (e) {}
+  setLayer(euLayer);
+
+  // swipen over een kaart = vorige/volgende
+  ['mapwrap', 'euwrap'].forEach(id => {
+    let sx = null;
+    $(id).addEventListener('touchstart', e => { sx = e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
+    $(id).addEventListener('touchend', e => {
+      if (sx == null) return;
+      const dx = e.changedTouches[0].clientX - sx; sx = null;
+      if (Math.abs(dx) > 40) { touch(); stop(); show(idx + (dx < 0 ? 1 : -1)); }
+    });
+  });
+
+  // --- tabbladen ---
+  let camsLoadedAt = 0;
+  function loadCams(force) {
+    if (!force && camsLoadedAt && Date.now() - camsLoadedAt < 10 * 60e3) return;
+    $$('#tab-cams iframe').forEach(f => { f.src = 'about:blank'; f.src = f.dataset.src; });
+    camsLoadedAt = Date.now();
+  }
+  function openTab(name) {
+    ['radar', 'weer', 'cams'].forEach(t => {
+      $(`tab-${t}`).hidden = t !== name;
+      $(`tabbtn-${t}`).setAttribute('aria-selected', String(t === name));
+    });
+    if (name === 'cams') { loadCams(); if (!travelStarted) { travelStarted = true; runTravel(); } }
+    if (name === 'weer' && frames.length && run) show(idx);
+    try { localStorage.setItem('tab', name); } catch (e) {}
+  }
+  ['radar', 'weer', 'cams'].forEach(t => { $(`tabbtn-${t}`).onclick = () => openTab(t); });
+  $('cam-reload').onclick = () => loadCams(true);
+  setInterval(() => { if (!$('tab-cams').hidden && !document.hidden) loadCams(); }, 60e3);
+  try { const t = localStorage.getItem('tab'); if (t && $(`tab-${t}`)) openTab(t); } catch (e) {}
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    refreshRadar(); refreshInfo(); refreshWeather();
+    if (!$('tab-cams').hidden) loadCams();
+  });
+  setInterval(refreshRadar, 10 * 60e3);
+  setInterval(refreshInfo, 15 * 60e3);
+  setInterval(refreshWeather, 30 * 60e3);
+  refreshRadar(true);
+  refreshInfo();
+  refreshWeather();
+  loadHistoryIndex();
+})();
+</script>
+</body>
+</html>
