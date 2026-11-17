@@ -119,7 +119,10 @@
   .dot span { position: absolute; left: 10px; top: -9px; white-space: nowrap; font-size: 11px; font-weight: 600; color: #fff; background: var(--dot); padding: 1px 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
   .dot2::before { background: #ff8a00; }
   .dot2::after { border-color: #ff8a00; }
-  .dot2 span { background: #ff8a00; color: #1b0f00; }
+  .dot2 span { background: #ff8a00; color: #1b0f00; line-height: 1.25; padding: 2px 5px; top: 9px; left: -8px; }
+  .dot2.left span { left: auto; right: -8px; text-align: right; }
+  .dot2 span b { display: block; font-weight: 600; }
+  .dot2 span small { display: block; font-size: 8.5px; font-weight: 500; }
   .dot2[hidden] { display: none; }
 
   /* --- zoeken op de radarkaart --- */
@@ -995,27 +998,33 @@
     // aangevuld met hoeveel sneeuw er op de webcam te zien is (elk uur gemeten door GitHub)
     { key: 'schatting', name: 'schatting', async get() {
         const P = [['ouillon', 45.2283, 6.2580, 2431], ['corbier', 45.2406, 6.2560, 1550]];
-        const MODELS = ['icon_seamless', 'ecmwf_ifs025', 'gfs_seamless'];
-        const url = 'https://api.open-meteo.com/v1/forecast?' + new URLSearchParams({
-          latitude: P.map(p => p[1]).join(','), longitude: P.map(p => p[2]).join(','), elevation: P.map(p => p[3]).join(','),
-          hourly: 'precipitation,temperature_2m', models: MODELS.join(','), past_days: 60, forecast_days: 1, timezone: 'UTC',
-        });
-        const [j, cam] = await Promise.all([
-          fetch(url).then(r => r.json()),
+        const [est, cam] = await Promise.all([
+          modelSnow(P.map(p => p.slice(1))),
           ARCHIVE ? fetch(`${ARCHIVE}bron/webcam.json?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : {}).catch(() => ({})) : {},
         ]);
         const out = {};
-        (Array.isArray(j) ? j : [j]).forEach((loc, n) => {
-          const h = loc.hourly, nowIso = new Date().toISOString().slice(0, 13);
-          const until = h.time.findIndex(t => t.slice(0, 13) > nowIso);
-          const vals = MODELS.map(m => snowpack(h[`precipitation_${m}`], h[`temperature_2m_${m}`], until < 0 ? h.time.length : until)).filter(v => v != null).sort((a, b) => a - b);
-          if (!vals.length) return;
-          const med = vals[Math.floor(vals.length / 2)], r5 = v => v < 10 ? Math.round(v) : Math.round(v / 5) * 5;
-          out[P[n][0]] = { cm: r5(med), lo: r5(vals[0]), hi: r5(vals[vals.length - 1]), cam: cam?.[P[n][0]] };
-        });
+        P.forEach(([k], n) => { if (est[n]) out[k] = { ...est[n], cam: cam?.[k] }; });
         return out;
       } },
   ];
+  // Geschat sneeuwdek (cm) op een reeks punten [lat, lon, hoogte]: mediaan en spreiding van 3 weermodellen
+  async function modelSnow(P) {
+    const MODELS = ['icon_seamless', 'ecmwf_ifs025', 'gfs_seamless'];
+    const url = 'https://api.open-meteo.com/v1/forecast?' + new URLSearchParams({
+      latitude: P.map(p => p[0].toFixed(4)).join(','), longitude: P.map(p => p[1].toFixed(4)).join(','), elevation: P.map(p => Math.round(p[2])).join(','),
+      hourly: 'precipitation,temperature_2m', models: MODELS.join(','), past_days: 60, forecast_days: 1, timezone: 'UTC',
+    });
+    const j = await fetch(url).then(r => r.json());
+    return (Array.isArray(j) ? j : [j]).map(loc => {
+      const h = loc.hourly; if (!h) return null;
+      const nowIso = new Date().toISOString().slice(0, 13);
+      const until = h.time.findIndex(t => t.slice(0, 13) > nowIso);
+      const vals = MODELS.map(m => snowpack(h[`precipitation_${m}`], h[`temperature_2m_${m}`], until < 0 ? h.time.length : until)).filter(v => v != null).sort((a, b) => a - b);
+      if (!vals.length) return null;
+      const med = vals[Math.floor(vals.length / 2)], r5 = v => v < 10 ? Math.round(v) : Math.round(v / 5) * 5;
+      return { cm: r5(med), lo: r5(vals[0]), hi: r5(vals[vals.length - 1]) };
+    });
+  }
   // Eenvoudig sneeuwdekmodel per uur: verse sneeuw erbij, smelten boven 0 °C, regen op sneeuw, en inklinken
   function snowpack(prec, temp, until) {
     if (!prec || !temp) return null;
@@ -1555,6 +1564,14 @@
     map.style.transform = zoomed ? `translate(${tx * 100}%, ${ty * 100}%) scale(${ZS})` : '';
     map.classList.toggle('zoomed', zoomed);
     $('zoom').textContent = zoomed ? 'Hele Alpen' : 'Zoom Sybelles';
+    if (typeof labelSide === 'function') labelSide();
+  }
+  // Label van de oranje stip naar links als de stip in de rechterhelft van het beeld staat
+  let placeXY = null;
+  function labelSide() {
+    if (!placeXY) return;
+    const vx = zoomed ? placeXY.x * ZS + zoomT().tx : placeXY.x;
+    $('dot2').classList.toggle('left', vx > 0.5);
   }
   $('zoom').onclick = () => setZoom(!zoomed);
   setZoom(true); // standaard ingezoomd op Les Sybelles; de knop toont de hele Alpen
@@ -1566,16 +1583,42 @@
     const q = place('alps', pl.lat, pl.lon);
     if (q.x < 0 || q.x > 1 || q.y < 0 || q.y > 1) return false;
     d2.style.left = (q.x * 100) + '%'; d2.style.top = (q.y * 100) + '%';
-    d2.querySelector('span').textContent = pl.name;
+    placeXY = q;
+    const lbl = d2.querySelector('span');
+    lbl.innerHTML = '<b></b><small>sneeuw schatten…</small>';
+    lbl.querySelector('b').textContent = pl.name;
     d2.hidden = false; $('search-clear').hidden = false;
+    placeSnow(pl, lbl.querySelector('small'));
     // Valt de plek buiten de ingezoomde uitsnede? Dan de hele Alpen tonen.
     if (zoomed && !keepZoom) {
       const { tx, ty } = zoomT();
       const inX = q.x >= -tx / ZS && q.x <= (1 - tx) / ZS, inY = q.y >= -ty / ZS && q.y <= (1 - ty) / ZS;
       if (!(inX && inY)) setZoom(false);
     }
+    labelSide();
     try { localStorage.setItem('place', JSON.stringify(pl)); } catch (e) {}
     return true;
+  }
+  // Sneeuw op berg en in dal bij de gezochte plek: dal = hoogte van het dorp, berg = hoogste punt binnen ±4 km
+  let placeReq = 0;
+  async function placeSnow(pl, el) {
+    const req = ++placeReq;
+    try {
+      const pts = [];
+      for (let i = -3; i <= 3; i++) for (let k = -3; k <= 3; k++) pts.push([pl.lat + i * 0.012, pl.lon + k * 0.017]);
+      const ej = await fetch('https://api.open-meteo.com/v1/elevation?' + new URLSearchParams({
+        latitude: pts.map(p => p[0].toFixed(4)).join(','), longitude: pts.map(p => p[1].toFixed(4)).join(','),
+      })).then(r => r.json());
+      const elev = ej.elevation || [];
+      const top = elev.reduce((a, b) => b > a ? b : a, -1), ti = elev.indexOf(top);
+      const valley = pl.elev ?? Math.min(...elev);
+      const both = top - valley >= 250;
+      const P = both ? [[pts[ti][0], pts[ti][1], top], [pl.lat, pl.lon, valley]] : [[pl.lat, pl.lon, valley]];
+      const est = await modelSnow(P);
+      if (req !== placeReq) return;
+      const fmt = (e, h) => `${Math.round(h / 10) * 10} m ${!e ? '–' : e.cm ? '±' + e.cm : '0'} cm`;
+      el.textContent = both ? `berg ${fmt(est[0], top)} · dal ${fmt(est[1], valley)}` : fmt(est[0], valley);
+    } catch (err) { if (req === placeReq) el.textContent = 'sneeuw onbekend'; }
   }
   $('search').addEventListener('submit', async e => {
     e.preventDefault();
@@ -1593,7 +1636,7 @@
         b.innerHTML = '<span></span> <small></small>';
         b.querySelector('span').textContent = r.name;
         b.querySelector('small').textContent = [r.admin1, r.country, r.elevation ? `${Math.round(r.elevation)} m` : ''].filter(Boolean).join(' · ');
-        b.onclick = () => { showPlace({ name: r.name, lat: r.latitude, lon: r.longitude }); res.hidden = true; $('search-q').value = ''; $('search-q').blur(); };
+        b.onclick = () => { showPlace({ name: r.name, lat: r.latitude, lon: r.longitude, elev: r.elevation });res.hidden = true; $('search-q').value = ''; $('search-q').blur(); };
         li.appendChild(b); res.appendChild(li);
       }
     } catch (err) { res.innerHTML = '<li class="msg">Zoeken lukt nu niet. Probeer het later opnieuw.</li>'; }
