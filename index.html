@@ -873,14 +873,39 @@
   const num = s => { const n = parseFloat(String(s).replace(',', '.')); return isFinite(n) ? Math.round(n) : null; };
   async function getDoc(path) {
     // Op Netlify via de eigen proxy (_redirects); elders uit het GitHub-archief, dat de pagina's elk uur ophaalt.
-    // bergfex weigert automatische verzoeken en is daarom alleen via Netlify beschikbaar.
+    // bergfex weigert automatische verzoeken; buiten Netlify komt die via een hulppagina op Netlify (bergfexViaNetlify).
     const viaNetlify = location.hostname.endsWith('netlify.app');
-    const url = path.startsWith('/bron/') && !viaNetlify ? `${ARCHIVE}${path.slice(1)}.html` : path;
-    const r = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
-    if (!r.ok) throw new Error(r.status);
-    const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+    let html;
+    if (path === '/bron/bergfex' && !viaNetlify) html = await bergfexViaNetlify();
+    else {
+      const url = path.startsWith('/bron/') && !viaNetlify ? `${ARCHIVE}${path.slice(1)}.html` : path;
+      const r = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(r.status);
+      html = await r.text();
+    }
+    const doc = new DOMParser().parseFromString(html, 'text/html');
     doc.querySelectorAll('script,style,noscript').forEach(e => e.remove());
     return doc;
+  }
+  // Onzichtbaar venstertje naar de Netlify-site, die de bergfex-pagina via zijn eigen proxy ophaalt en terugstuurt
+  const NETLIFY = 'https://sneeuwradarljb.netlify.app';
+  function bergfexViaNetlify() {
+    return new Promise((resolve, reject) => {
+      const f = document.createElement('iframe');
+      f.hidden = true;
+      f.src = `${NETLIFY}/bergfex.html?t=${Date.now()}`;
+      const done = (fn, v) => { clearTimeout(timer); removeEventListener('message', onMsg); f.remove(); fn(v); };
+      const onMsg = e => {
+        if (e.origin !== NETLIFY || e.source !== f.contentWindow || !e.data) return;
+        if (e.data.ready) f.contentWindow.postMessage('bergfex', NETLIFY);
+        else if ('bergfex' in e.data) e.data.bergfex ? done(resolve, e.data.bergfex) : done(reject, new Error(e.data.status));
+      };
+      let timer = setTimeout(() => done(reject, new Error('timeout')), 12000);
+      // Geladen maar geen hulppagina (bijv. Netlify uit de lucht)? Dan niet blijven wachten.
+      f.onload = () => { clearTimeout(timer); timer = setTimeout(() => done(reject, new Error('geen antwoord')), 6000); };
+      addEventListener('message', onMsg);
+      document.body.appendChild(f);
+    });
   }
   const textOf = doc => (doc.body ? doc.body.textContent : '').replace(/ /g, ' ').replace(/\s+/g, ' ');
 
