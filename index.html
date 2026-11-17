@@ -1046,7 +1046,7 @@
     const mainEl = el.querySelector('.spot-main'), srcEl = el.querySelector('.spot-src'), list = el.querySelector('.spot-others');
     list.innerHTML = '';
     // Officiële meting staat op 0 terwijl model en/of webcam sneeuw zien? Dan is die nog niet bijgewerkt: toon de schatting.
-    const camSnow = est?.cam?.pct >= 25;
+    const camSnow = est?.cam?.pct >= (which === 'corbier' ? 55 : 25); // Le Corbier heeft ook zonder sneeuw veel wit (gebouwen)
     const useEst = est && (!official || (official.data[which].cm === 0 && (est.cm >= 5 || camSnow)));
     if (!official && !est) {
       mainEl.innerHTML = '–<span>cm</span>';
