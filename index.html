@@ -991,31 +991,94 @@
         }
         return out;
       } },
+    // Eigen schatting: sneeuwdek opgebouwd uit neerslag en temperatuur op de juiste hoogte (3 weermodellen, 60 dagen terug),
+    // aangevuld met hoeveel sneeuw er op de webcam te zien is (elk uur gemeten door GitHub)
+    { key: 'schatting', name: 'schatting', async get() {
+        const P = [['ouillon', 45.2283, 6.2580, 2431], ['corbier', 45.2406, 6.2560, 1550]];
+        const MODELS = ['icon_seamless', 'ecmwf_ifs025', 'gfs_seamless'];
+        const url = 'https://api.open-meteo.com/v1/forecast?' + new URLSearchParams({
+          latitude: P.map(p => p[1]).join(','), longitude: P.map(p => p[2]).join(','), elevation: P.map(p => p[3]).join(','),
+          hourly: 'precipitation,temperature_2m', models: MODELS.join(','), past_days: 60, forecast_days: 1, timezone: 'UTC',
+        });
+        const [j, cam] = await Promise.all([
+          fetch(url).then(r => r.json()),
+          ARCHIVE ? fetch(`${ARCHIVE}bron/webcam.json?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : {}).catch(() => ({})) : {},
+        ]);
+        const out = {};
+        (Array.isArray(j) ? j : [j]).forEach((loc, n) => {
+          const h = loc.hourly, nowIso = new Date().toISOString().slice(0, 13);
+          const until = h.time.findIndex(t => t.slice(0, 13) > nowIso);
+          const vals = MODELS.map(m => snowpack(h[`precipitation_${m}`], h[`temperature_2m_${m}`], until < 0 ? h.time.length : until)).filter(v => v != null).sort((a, b) => a - b);
+          if (!vals.length) return;
+          const med = vals[Math.floor(vals.length / 2)], r5 = v => v < 10 ? Math.round(v) : Math.round(v / 5) * 5;
+          out[P[n][0]] = { cm: r5(med), lo: r5(vals[0]), hi: r5(vals[vals.length - 1]), cam: cam?.[P[n][0]] };
+        });
+        return out;
+      } },
   ];
+  // Eenvoudig sneeuwdekmodel per uur: verse sneeuw erbij, smelten boven 0 °C, regen op sneeuw, en inklinken
+  function snowpack(prec, temp, until) {
+    if (!prec || !temp) return null;
+    let d = 0, n = 0;
+    for (let i = 0; i < until; i++) {
+      const p = prec[i], t = temp[i];
+      if (p == null || t == null) continue;
+      n++;
+      // 1 mm neerslag wordt 0,7 tot 1,3 cm verse sneeuw: hoe kouder, hoe luchtiger
+      if (t <= -6) d += p * 1.3;
+      else if (t <= -2) d += p * 1.0;
+      else if (t <= 0.5) d += p * 0.7;
+      else if (t <= 1.5) d += p * 0.35;      // natte sneeuw / mengsel
+      else if (d > 0) d -= p * 0.1;          // regen op sneeuw
+      if (t > 0) d -= 0.08 * t;              // smelt per graad per uur
+      d -= d * 0.004;                        // inklinken, ca. 9% per dag (verse sneeuw zakt snel)
+      if (d < 0) d = 0;
+    }
+    return n > 24 ? d : null;
+  }
 
   function renderSpot(which, results) {
     const el = $(`spot-${which}`);
-    const have = results.filter(r => r.data?.[which] && r.data[which].cm != null);
+    const est = results.find(r => r.src.key === 'schatting')?.data?.[which];
+    const have = results.filter(r => r.src.key !== 'schatting' && r.data?.[which] && r.data[which].cm != null);
     const leads = have.filter(r => r.src.lead).sort((a, b) => a.src.lead - b.src.lead);
-    const main = leads[0] || have[0];
+    const official = leads[0] || have[0];
     const mainEl = el.querySelector('.spot-main'), srcEl = el.querySelector('.spot-src'), list = el.querySelector('.spot-others');
     list.innerHTML = '';
-    if (!main) {
+    // Officiële meting staat op 0 terwijl model en/of webcam sneeuw zien? Dan is die nog niet bijgewerkt: toon de schatting.
+    const camSnow = est?.cam?.pct >= 25;
+    const useEst = est && (!official || (official.data[which].cm === 0 && (est.cm >= 5 || camSnow)));
+    if (!official && !est) {
       mainEl.innerHTML = '–<span>cm</span>';
       srcEl.textContent = results.length ? 'geen meting beschikbaar' : 'laden…';
       return;
     }
-    mainEl.innerHTML = `${main.data[which].cm}<span>cm</span>`;
-    srcEl.innerHTML = leads.map(r => `${r.src.name} <b>${r.data[which].cm}</b>`).join(' · ') || `${main.src.name}`;
+    if (useEst) {
+      mainEl.innerHTML = `±${est.cm}<span>cm</span>`;
+      srcEl.innerHTML = `schatting${camSnow ? ', sneeuw op webcam' : ''}` + (leads.length ? ` · ${leads.map(r => `${r.src.name} <b>${r.data[which].cm}</b>`).join(' · ')} (niet bijgewerkt)` : '');
+    } else {
+      mainEl.innerHTML = `${official.data[which].cm}<span>cm</span>`;
+      srcEl.innerHTML = leads.map(r => `${r.src.name} <b>${r.data[which].cm}</b>`).join(' · ') || `${official.src.name}`;
+    }
+    if (est) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>schatting <small>model</small></span><b>${est.lo === est.hi ? est.cm : `${est.lo}–${est.hi}`} cm</b>`;
+      list.appendChild(li);
+      if (est.cam) {
+        const c = document.createElement('li');
+        c.innerHTML = `<span>webcam <small>${est.cam.time.slice(11)}</small></span><b>${est.cam.pct}% wit</b>`;
+        list.appendChild(c);
+      }
+    }
     for (const r of results) {
-      if (r.src.lead) continue;
+      if (r.src.lead || r.src.key === 'schatting') continue;
       const li = document.createElement('li');
       const d = r.data?.[which];
       li.innerHTML = `<span>${r.src.name}${d?.alt ? ` <small>${d.alt} m</small>` : ''}</span><b>${d && d.cm != null ? d.cm + ' cm' : r.error ? 'niet bereikbaar' : '–'}</b>`;
       list.appendChild(li);
     }
     for (const r of results) {
-      if (!r.src.lead || (r.data?.[which]?.cm != null)) continue;
+      if (!r.src.lead || r.src.key === 'schatting' || (r.data?.[which]?.cm != null)) continue;
       const li = document.createElement('li');
       li.innerHTML = `<span>${r.src.name}</span><b>${r.error ? 'niet bereikbaar' : '–'}</b>`;
       list.prepend(li);
