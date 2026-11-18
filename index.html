@@ -31,7 +31,10 @@
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; min-height: 100%; }
+  html { background: var(--bg); }
+  /* Op een laptop of tablet een normale kolombreedte in het midden, op een telefoon de volle breedte */
   body {
+    max-width: 680px; margin: 0 auto;
     background: var(--bg); color: var(--fg); font: 15px/1.4 var(--font);
     padding: env(safe-area-inset-top, 0px) max(12px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(12px, env(safe-area-inset-left, 0px));
     display: flex; flex-direction: column; gap: 10px;
@@ -46,7 +49,7 @@
   .tabs button { min-height: 38px; min-width: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; font-size: 13px; padding: 0 2px; }
 
   /* --- pistekaart --- */
-  .pistewrap { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 70vh; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: #dfe7ee; touch-action: none; flex-shrink: 0; }
+  .pistewrap { position: relative; width: min(100%, calc(62svh * 4 / 3)); margin-inline: auto; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: #dfe7ee; touch-action: none; flex-shrink: 0; }
   .pistewrap svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
   .pistewrap svg:active { cursor: grabbing; }
   #piste-svg .ln { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
@@ -69,7 +72,8 @@
   .cam-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .cam-head h2 { font-size: 16px; margin: 0; }
   .cam-head small { color: var(--muted); font-size: 12px; }
-  .cam-frame { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 60vh; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+  /* webcams nooit hoger dan ongeveer de helft van het scherm; de breedte schaalt mee */
+  .cam-frame { position: relative; width: min(100%, calc(45svh * 4 / 3)); margin-inline: auto; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000; }
   .cam-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
   .hint { font-size: 11px; color: var(--muted); }
 
@@ -106,8 +110,8 @@
 
   /* --- kaarten --- */
   .mapwrap { position: relative; width: 100%; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: #cfd8dc; flex-shrink: 0; }
-  #mapwrap { aspect-ratio: 960 / 586; }
-  #euwrap { aspect-ratio: 869 / 696; }
+  #mapwrap { aspect-ratio: 960 / 586; margin-inline: auto; }
+  #euwrap { aspect-ratio: 869 / 696; width: min(100%, calc(58svh * 869 / 696)); margin-inline: auto; }
   .map { position: absolute; inset: 0; transform-origin: 0 0; transition: transform .35s ease; }
   .map img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .map .layer { opacity: .8; }
@@ -183,7 +187,7 @@
   .chips button { min-height: 34px; padding: 0 10px; font-size: 13px; border-radius: 99px; }
   .pick { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
   .pick input { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0; }
-  .compare { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 60vh; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000; touch-action: pan-y; }
+  .compare { position: relative; width: min(100%, calc(45svh * 4 / 3)); margin-inline: auto; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #000; touch-action: pan-y; }
   .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: var(--pan, 50%) center; display: block; }
   .pan { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
   .pan input { flex: 1; accent-color: var(--accent); }
@@ -210,7 +214,7 @@
   .strip-lbl span { position: absolute; white-space: nowrap; }
   .hist-nav { display: flex; gap: 8px; align-items: center; }
   .hist-nav input { flex: 1; min-width: 0; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
-  #histwrap { aspect-ratio: 960 / 586; }
+  #histwrap { aspect-ratio: 960 / 586; width: min(100%, calc(50svh * 960 / 586)); margin-inline: auto; }
 
   /* --- samenvatting --- */
   .summary { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; -webkit-user-select: text; user-select: text; }
@@ -636,6 +640,20 @@
   }
   const colorOf = c => c ? `rgb(${(c.kind === 'snow' ? SNOW : RAIN)[c.i].join(',')})` : '';
   const labelOf = c => !c ? 'droog op Les Sybelles' : c.kind === 'snow' ? `Les Sybelles: ${SNOW_LBL[c.i]} cm sneeuw` : `Les Sybelles: ${RAIN_LBL[c.i]} mm regen`;
+
+  // Radarkaart net zo klein maken dat de tijdbalk bij het openen direct in beeld staat
+  function fitMap() {
+    const wrap = $('mapwrap'), ctrl = document.querySelector('#tab-radar .controls');
+    if (!wrap || !ctrl || $('tab-radar').hidden) return;
+    wrap.style.width = '';
+    const full = wrap.getBoundingClientRect().width;
+    const over = ctrl.getBoundingClientRect().bottom + window.scrollY + 8 - window.innerHeight;
+    if (over <= 0) return;
+    const h = wrap.getBoundingClientRect().height - over;
+    const w = Math.max(220, h * 960 / 586);
+    if (w < full) wrap.style.width = `${Math.round(w)}px`;
+  }
+  addEventListener('resize', fitMap);
 
   // Schuifblokje even breed als één vakje: tijdbalkbreedte gedeeld door het aantal vakjes
   function sizeThumbs() {
@@ -1122,6 +1140,7 @@
     }));
     renderSpot('ouillon', results);
     renderSpot('corbier', results);
+    fitMap();
     return { note:results.find(r => r.src.key === 'lumiplan')?.data?.note };
   }
 
@@ -1714,6 +1733,7 @@
     });
     if (name === 'cams') { loadCams(); if (!travelStarted) { travelStarted = true; runTravel(); } }
     if (name === 'pistes') initPisteMap();
+    if (name === 'radar') fitMap();
     if (name === 'weer' && frames.length && run) show(idx);
     try { localStorage.setItem('tab', name); } catch (e) {}
   }
@@ -1731,6 +1751,7 @@
   setInterval(refreshInfo, 15 * 60e3);
   setInterval(refreshWeather, 30 * 60e3);
   refreshRadar(true);
+  fitMap();
   refreshInfo();
   refreshWeather();
   loadHistoryIndex();
