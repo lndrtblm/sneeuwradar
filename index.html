@@ -994,6 +994,10 @@
         }
         return out;
       } },
+    { key: 'wintersport', name: 'wintersport.nl', async get() {
+        const a = (await wsAreas()).find(x => x.slug === 'sybelles');
+        return a ? { ouillon: { cm: a.berg }, corbier: { cm: a.dal } } : {};
+      } },
     // Eigen schatting: sneeuwdek opgebouwd uit neerslag en temperatuur op de juiste hoogte (3 weermodellen, 60 dagen terug),
     // aangevuld met hoeveel sneeuw er op de webcam te zien is (elk uur gemeten door GitHub)
     { key: 'schatting', name: 'schatting', async get() {
@@ -1007,6 +1011,16 @@
         return out;
       } },
   ];
+  // Sneeuwhoogtes van alle skigebieden op wintersport.nl (elk uur door GitHub opgehaald)
+  let wsCache = null, wsAt = 0;
+  async function wsAreas() {
+    if (!wsCache || Date.now() - wsAt > 15 * 60e3) {
+      wsCache = await fetch(`${ARCHIVE}bron/wintersport.json?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []);
+      wsAt = Date.now();
+    }
+    return wsCache;
+  }
+  const km = (a, b, c, d) => { const r = Math.PI / 180, x = (d - b) * r * Math.cos((a + c) / 2 * r), y = (c - a) * r; return 6371 * Math.hypot(x, y); };
   // Geschat sneeuwdek (cm) op een reeks punten [lat, lon, hoogte]: mediaan en spreiding van 3 weermodellen
   async function modelSnow(P) {
     const MODELS = ['icon_seamless', 'ecmwf_ifs025', 'gfs_seamless'];
@@ -1603,6 +1617,17 @@
   let placeReq = 0;
   async function placeSnow(pl, el) {
     const req = ++placeReq;
+    // Eerst wintersport.nl: het dichtstbijzijnde skigebied binnen 20 km met een gemelde sneeuwhoogte
+    try {
+      const near = (await wsAreas()).map(a => ({ ...a, d: km(pl.lat, pl.lon, a.lat, a.lon) })).filter(a => a.d <= 20).sort((a, b) => a.d - b.d);
+      const hit = near.find(a => (a.berg || 0) + (a.dal || 0) > 0);
+      if (hit) {
+        if (req !== placeReq) return;
+        const when = hit.upd ? new Date(hit.upd.length > 10 ? hit.upd : hit.upd + 'T23:00:00Z').toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }) : '';
+        el.textContent = `berg ${hit.berg ?? '–'} cm · dal ${hit.dal ?? '–'} cm · ${hit.name !== pl.name ? hit.name + ', ' : ''}wintersport.nl ${when}`.trim();
+        return;
+      }
+    } catch (e) { /* geen wintersport.nl-gegevens: val terug op de eigen schatting */ }
     try {
       const pts = [];
       for (let i = -3; i <= 3; i++) for (let k = -3; k <= 3; k++) pts.push([pl.lat + i * 0.012, pl.lon + k * 0.017]);
