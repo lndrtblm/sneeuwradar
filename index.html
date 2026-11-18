@@ -117,10 +117,10 @@
   .map .layer { opacity: .8; }
   .map .layer.hidden { opacity: 0; }
   .dot { position: absolute; width: 0; height: 0; z-index: 5; transition: transform .35s ease; }
-  .map.zoomed .dot { transform: scale(.4); }
-  .dot::before { content: ""; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--dot); border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 1px 4px rgba(0,0,0,.5); }
-  .dot::after { content: ""; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--dot); animation: pulse 2s infinite; }
-  .dot span { position: absolute; left: 10px; top: -9px; white-space: nowrap; font-size: 11px; font-weight: 600; color: #fff; background: var(--dot); padding: 1px 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .map.zoomed .dot { transform: scale(var(--dz, .4)); }
+  .dot::before { content: ""; position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--dot); border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.5); }
+  .dot::after { content: ""; position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--dot); animation: pulse 2s infinite; }
+  .dot span { position: absolute; left: 8px; top: -9px; white-space: nowrap; font-size: 11px; font-weight: 600; color: #fff; background: var(--dot); padding: 1px 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
   /* Labels verdwijnen na 5 s langzaam (beter zicht op de kaart); tik op de kaart om ze weer te tonen */
   .dot span { animation: lblfade 1.5s ease 5s forwards; }
   @keyframes lblfade { to { opacity: 0; visibility: hidden; } }
@@ -131,6 +131,12 @@
   .dot2 span b { display: block; font-weight: 600; }
   .dot2 span small { display: block; font-size: 8.5px; font-weight: 500; }
   .dot2[hidden] { display: none; }
+  /* Diepste zoom: geen stip maar de omtrek van het skigebied; radarpixels scherp zodat je ziet waar het precies valt */
+  .area { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  .area polygon { fill: none; stroke: #fff; stroke-width: 2.5px; vector-effect: non-scaling-stroke; stroke-linejoin: round; filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1px #000); }
+  .mapwrap.z2 .area { opacity: 1; transition-delay: .3s; }
+  .mapwrap.z2 #dot { opacity: 0; }
+  .mapwrap.z2 .map .layer { image-rendering: pixelated; }
 
   /* --- zoeken op de radarkaart --- */
   .search { display: flex; gap: 6px; }
@@ -420,6 +426,7 @@
     <div class="dot dot2" id="dot2" hidden><span></span></div>
     <div class="dot" id="dot"><span>Les Sybelles</span></div>
   </div>
+  <svg class="area" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon id="area-line" points=""/></svg>
   <div class="status" id="status" hidden></div>
 </div>
 
@@ -1642,14 +1649,28 @@
     $$('[data-play]').forEach(x => { x.textContent = '❚❚ Pauze'; x.classList.add('on'); });
     timer = setInterval(() => show(idx + 1 >= frames.length ? currentIndex() : idx + 1), 700);
   });
-  const ZS = 3;
-  const zoomT = () => ({ tx: Math.min(0, Math.max(1 - ZS, 0.5 - p.x * ZS)), ty: Math.min(0, Math.max(1 - ZS, 0.5 - p.y * ZS)) });
+  // Drie zoomniveaus: 0 = hele Alpen, 1 = regio rond Les Sybelles, 2 = alleen het skigebied met zijn omtrek
+  const ZOOMS = [1, 3, 22];
+  let ZS = 1, zoomLvl = 1;
+  const zoomC = () => zoomLvl === 2 ? AREA_C : p;
+  const zoomT = () => { const c = zoomC(); return { tx: Math.min(0, Math.max(1 - ZS, 0.5 - c.x * ZS)), ty: Math.min(0, Math.max(1 - ZS, 0.5 - c.y * ZS)) }; };
+  // Omtrek van Les Sybelles (OpenStreetMap, way 601290756), op dezelfde manier op de kaart gezet als de stip
+  const AREA = [[45.1974,6.2140],[45.2017,6.1843],[45.2030,6.1802],[45.2043,6.1784],[45.2051,6.1783],[45.2107,6.1780],[45.2116,6.1781],
+    [45.2450,6.1976],[45.2466,6.2001],[45.2607,6.2330],[45.2748,6.2566],[45.2695,6.2953],[45.2688,6.2962],[45.2669,6.2980],
+    [45.2653,6.2989],[45.2649,6.2991],[45.2139,6.2742],[45.2131,6.2735],[45.2113,6.2700],[45.2112,6.2695],[45.1977,6.2195],[45.1974,6.2147]]
+    .map(([la, lo]) => place('alps', la, lo));
+  const AREA_C = { x: (Math.min(...AREA.map(a => a.x)) + Math.max(...AREA.map(a => a.x))) / 2, y: (Math.min(...AREA.map(a => a.y)) + Math.max(...AREA.map(a => a.y))) / 2 };
   function setZoom(z) {
-    zoomed = z;
+    zoomLvl = z === true ? 1 : z === false ? 0 : z;
+    zoomed = zoomLvl > 0; ZS = ZOOMS[zoomLvl];
     const { tx, ty } = zoomT(), map = $('map');
     map.style.transform = zoomed ? `translate(${tx * 100}%, ${ty * 100}%) scale(${ZS})` : '';
+    map.style.setProperty('--dz', 1.2 / ZS);
     map.classList.toggle('zoomed', zoomed);
-    $('zoom').textContent = zoomed ? 'Hele Alpen' : 'Zoom Sybelles';
+    $('mapwrap').classList.toggle('z2', zoomLvl === 2);
+    // De omtrek staat buiten de geschaalde kaart, zodat het lijntje scherp en dun blijft
+    $('area-line').setAttribute('points', AREA.map(a => `${((a.x * ZS + tx) * 100).toFixed(2)},${((a.y * ZS + ty) * 100).toFixed(2)}`).join(' '));
+    $('zoom').textContent = ['Zoom Sybelles', 'Zoom gebied', 'Hele Alpen'][zoomLvl];
     if (typeof labelSide === 'function') labelSide();
   }
   // Label van de oranje stip naar links als de stip in de rechterhelft van het beeld staat
@@ -1659,7 +1680,7 @@
     const vx = zoomed ? placeXY.x * ZS + zoomT().tx : placeXY.x;
     $('dot2').classList.toggle('left', vx > 0.5);
   }
-  $('zoom').onclick = () => setZoom(!zoomed);
+  $('zoom').onclick = () => setZoom((zoomLvl + 1) % 3);
   setZoom(true); // standaard ingezoomd op Les Sybelles; de knop toont de hele Alpen
 
   // Labels op de kaart opnieuw 5 s tonen (daarna vervagen ze weer)
