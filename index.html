@@ -38,8 +38,8 @@
     -webkit-user-select: none; user-select: none;
   }
   header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-top: 10px; }
-  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
-  .run { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; white-space: nowrap; }
+  .run { font-size: 11px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 
   /* --- tabbladen --- */
   .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
@@ -147,17 +147,18 @@
   /* --- tijdbalk in de kleuren van de sneeuwval op Les Sybelles --- */
   .controls { display: flex; align-items: center; gap: 8px; }
   .timeline { position: relative; flex: 1; min-width: 0; height: 44px; }
-  .track { position: absolute; left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2); top: 13px; height: 18px; display: flex; border-radius: 4px; overflow: hidden; background: var(--dry); }
+  .track { position: absolute; left: 0; right: 0; top: 13px; height: 18px; display: flex; border-radius: 4px; overflow: hidden; background: var(--dry); }
   .track i { flex: 1; background: var(--dry); border-right: 1px solid rgba(14,26,43,.35); }
   .track i.day { border-left: 2px solid var(--muted); }
   .track i.loading { background: repeating-linear-gradient(90deg, var(--dry) 0 3px, var(--line) 3px 6px); }
-  .days { position: absolute; left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2); top: 32px; height: 12px; font-size: 9px; color: var(--muted); }
+  .days { position: absolute; left: 0; right: 0; top: 32px; height: 12px; font-size: 9px; color: var(--muted); }
   .days span { position: absolute; transform: translateX(2px); white-space: nowrap; }
   .timeline input[type=range] { position: absolute; inset: 0; width: 100%; height: 44px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; }
   .timeline input[type=range]::-webkit-slider-runnable-track { height: 44px; background: transparent; }
   .timeline input[type=range]::-moz-range-track { height: 44px; background: transparent; }
-  .timeline input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--thumb); height: 26px; margin-top: 9px; border-radius: 6px; background: transparent; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.5); }
-  .timeline input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 6px; background: transparent; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
+  /* het witte blokje is precies één vakje breed (--thumb wordt per tijdbalk uitgerekend) en valt over het vakje heen */
+  .timeline input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; box-sizing: border-box; width: var(--thumb); height: 26px; margin-top: 9px; border-radius: 2px; background: transparent; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7), 0 2px 6px rgba(0,0,0,.5); }
+  .timeline input[type=range]::-moz-range-thumb { box-sizing: border-box; width: var(--thumb); height: 26px; border-radius: 2px; background: transparent; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7); }
 
   button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-height: 44px; min-width: 44px; padding: 0 12px; cursor: pointer; }
   button:active { background: var(--line); }
@@ -636,6 +637,15 @@
   const colorOf = c => c ? `rgb(${(c.kind === 'snow' ? SNOW : RAIN)[c.i].join(',')})` : '';
   const labelOf = c => !c ? 'droog op Les Sybelles' : c.kind === 'snow' ? `Les Sybelles: ${SNOW_LBL[c.i]} cm sneeuw` : `Les Sybelles: ${RAIN_LBL[c.i]} mm regen`;
 
+  // Schuifblokje even breed als één vakje: tijdbalkbreedte gedeeld door het aantal vakjes
+  function sizeThumbs() {
+    $$('.timeline').forEach(tl => {
+      const n = tl.querySelector('.track').children.length || 1, w = tl.clientWidth;
+      if (w) tl.style.setProperty('--thumb', `${w / n}px`);
+    });
+  }
+  if (window.ResizeObserver) { const ro = new ResizeObserver(() => sizeThumbs()); $$('.timeline').forEach(tl => ro.observe(tl)); }
+
   function drawTracks() {
     $$('.timeline:not(.hist)').forEach(tl => {
       const track = tl.querySelector('.track'), days = tl.querySelector('.days');
@@ -654,6 +664,7 @@
         track.appendChild(seg);
       });
     });
+    sizeThumbs();
   }
   let sampling = 0;
   async function sampleAll() {
@@ -1428,6 +1439,7 @@
     const tl = document.querySelector('.timeline.hist'), track = tl.querySelector('.track');
     track.innerHTML = '';
     hist.frames.forEach(x => { const seg = document.createElement('i'); if (x.here) seg.style.background = colorOf(x.here); track.appendChild(seg); });
+    sizeThumbs();
     $('hist-slider').max = Math.max(0, hist.frames.length - 1);
     if (!hist.frames.length) {
       $('hist-when').textContent = fmtDay.format(new Date(k + 'T12:00:00'));
