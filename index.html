@@ -404,6 +404,11 @@
 </form>
 <ul class="search-res" id="search-res" hidden></ul>
 
+<div class="seg2" id="radar-mode" role="group" aria-label="Wat de radarkaart toont">
+  <button data-mode="step" class="on">Per 3 uur</button>
+  <button data-mode="cum">Opgeteld</button>
+</div>
+
 <div class="mapwrap" id="mapwrap">
   <div class="map" id="map">
     <img src="https://static.wintersport.nl/images/bg-map-alps.jpg" alt="Kaart van de Alpen">
@@ -573,7 +578,7 @@
     const out = [];
     for (let h = STEP; h <= MAXH; h += STEP) {
       const end = new Date(base + h * 3600e3), start = new Date(end - STEP * 3600e3);
-      out.push({ h, start, end, here: undefined, t850: undefined });
+      out.push({ h, start, end, here: undefined, cum: undefined, t850: undefined });
     }
     return out;
   }
@@ -581,6 +586,11 @@
     const name = LAYERS[layer]?.tpl === 'e' ? stamp(f.end) : `${stamp(f.start)}_${stamp(f.end)}`;
     return `${DOMAIN}/${region}/${layer}/${run.date}_${run.hour}/${name}.png`;
   }
+  // Radarkaart: neerslag per 3 uur, of opgeteld vanaf het begin van de modelrun (zoals de sneeuwverwachting op wintersport.nl)
+  let radarMode = 'step';
+  try { if (localStorage.getItem('radarMode') === 'cum') radarMode = 'cum'; } catch (e) {}
+  const radarUrl = (f, mode = radarMode) => mode === 'cum' ? `${DOMAIN}/alps/precip/${run.date}_${run.hour}/${stamp(f.end)}.png` : layerUrl('alps', 'precip', f);
+  const hereOf = f => radarMode === 'cum' ? f.cum : f.here;
   function currentIndex() {
     const now = Date.now();
     const i = frames.findIndex(f => now >= f.start && now < f.end);
@@ -669,9 +679,9 @@
       const track = tl.querySelector('.track'), days = tl.querySelector('.days');
       track.innerHTML = ''; days.innerHTML = '';
       frames.forEach((f, i) => {
-        const seg = document.createElement('i');
-        if (f.here === undefined) seg.className = 'loading';
-        else if (f.here) seg.style.background = colorOf(f.here);
+        const seg = document.createElement('i'), c = hereOf(f);
+        if (c === undefined) seg.className = 'loading';
+        else if (c) seg.style.background = colorOf(c);
         if (i > 0 && +fmtH.format(f.start) < 3) {
           seg.classList.add('day');
           const lbl = document.createElement('span');
@@ -701,6 +711,7 @@
     }
     drawTracks(); showHere();
     archivePrune().then(loadHistoryIndex);
+    if (radarMode === 'cum') await sampleCum(token);
     // temperatuur op 1500 m, alleen nodig als terugval voor het weerbeeld
     if (!omData) {
       for (const f of frames) {
@@ -712,21 +723,51 @@
     if (!omData) renderSummary();
   }
 
+  // Opgetelde neerslag op Les Sybelles per tijdstip (alleen nodig als die stand aan staat)
+  async function sampleCum(token) {
+    const order = frames.map((f, i) => i).sort((a, b) => Math.abs(a - idx) - Math.abs(b - idx));
+    let n = 0;
+    for (const i of order) {
+      if (token !== sampling || radarMode !== 'cum') return;
+      const f = frames[i];
+      if (f.cum !== undefined) continue;
+      const im = await loadImg(radarUrl(f, 'cum'));
+      f.cum = im ? classify(im) : null;
+      if (++n % 6 === 0) drawTracks();
+      if (i === idx) showHere();
+    }
+    drawTracks(); showHere();
+  }
+
   // --- tonen ---
   function showHere() {
     const f = frames[idx]; if (!f) return;
-    $('rel').textContent = f.here === undefined ? 'sneeuw- en regenval per 3 uur' : labelOf(f.here);
+    const c = hereOf(f), cum = radarMode === 'cum';
+    $('rel').textContent = c === undefined ? (cum ? 'opgeteld vanaf het begin van het model' : 'sneeuw- en regenval per 3 uur')
+      : cum ? (c ? labelOf(c).replace('Les Sybelles: ', 'Les Sybelles opgeteld: ') : 'nog droog op Les Sybelles') : labelOf(c);
     $('eu-rel').textContent = f.here === undefined ? '' : labelOf(f.here);
   }
+  function setRadarMode(m) {
+    radarMode = m;
+    try { localStorage.setItem('radarMode', m); } catch (e) {}
+    $$('#radar-mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+    if (!frames.length || !run) return;
+    show(idx); drawTracks();
+    if (m === 'cum') sampleCum(sampling);
+  }
+  $$('#radar-mode button').forEach(b => { b.onclick = () => setRadarMode(b.dataset.mode); b.classList.toggle('on', b.dataset.mode === radarMode); });
   function show(i) {
     if (!frames.length) return;
     idx = Math.max(0, Math.min(frames.length - 1, i));
     const f = frames[idx];
     $$('.timeline:not(.hist) input').forEach(s => { s.value = idx; });
-    $('radar').src = layerUrl('alps', 'precip', f);
+    $('radar').src = radarUrl(f);
     if (!$('tab-weer').hidden) $('eulayer').src = layerUrl('europe', euLayer, f);
     const day = fmtDay.format(f.start);
-    $$('[data-when]').forEach(el => { el.textContent = `${day[0].toUpperCase()}${day.slice(1)} · ${fmtHour.format(f.start)}–${fmtHour.format(f.end)}`; });
+    $$('[data-when]').forEach(el => {
+      const cumHere = radarMode === 'cum' && el.closest('#tab-radar');
+      el.textContent = `${day[0].toUpperCase()}${day.slice(1)} · ${cumHere ? 'tot ' + fmtHour.format(f.end) : `${fmtHour.format(f.start)}–${fmtHour.format(f.end)}`}`;
+    });
     const now = Date.now();
     $$('[data-chip]').forEach(chip => {
       chip.hidden = false;
@@ -740,7 +781,7 @@
     });
     showHere();
     const next = frames[(idx + 1) % frames.length];
-    loadImg(layerUrl('alps', 'precip', next));
+    loadImg(radarUrl(next));
     if (!$('tab-weer').hidden) loadImg(layerUrl('europe', euLayer, next));
   }
   [['radar', 'status'], ['eulayer', 'eustatus']].forEach(([img, st]) => {
