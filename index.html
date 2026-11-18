@@ -121,6 +121,9 @@
   .dot::before { content: ""; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--dot); border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 1px 4px rgba(0,0,0,.5); }
   .dot::after { content: ""; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--dot); animation: pulse 2s infinite; }
   .dot span { position: absolute; left: 10px; top: -9px; white-space: nowrap; font-size: 11px; font-weight: 600; color: #fff; background: var(--dot); padding: 1px 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  /* Labels verdwijnen na 5 s langzaam (beter zicht op de kaart); tik op de kaart om ze weer te tonen */
+  .dot span { animation: lblfade 1.5s ease 5s forwards; }
+  @keyframes lblfade { to { opacity: 0; visibility: hidden; } }
   .dot2::before { background: #ff8a00; }
   .dot2::after { border-color: #ff8a00; }
   .dot2 span { background: #ff8a00; color: #1b0f00; line-height: 1.25; padding: 2px 5px; top: 9px; left: -8px; }
@@ -1659,6 +1662,25 @@
   $('zoom').onclick = () => setZoom(!zoomed);
   setZoom(true); // standaard ingezoomd op Les Sybelles; de knop toont de hele Alpen
 
+  // Labels op de kaart opnieuw 5 s tonen (daarna vervagen ze weer)
+  function flashLabels(root) {
+    root.querySelectorAll('.dot span').forEach(s => { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; });
+  }
+  // Tik op de kaart: alle labels terug. Muis bij een stip of op de plek van zijn label: dat label terug,
+  // het blijft staan zolang de muis er is en vervaagt 5 s nadat de muis weg is.
+  ['mapwrap', 'euwrap', 'histwrap'].forEach(id => {
+    const w = $(id); if (!w) return;
+    w.addEventListener('click', () => flashLabels(w));
+    w.addEventListener('mousemove', e => {
+      w.querySelectorAll('.dot:not([hidden])').forEach(d => {
+        const c = d.getBoundingClientRect(), s = d.querySelector('span'), r = s.getBoundingClientRect();
+        const near = Math.hypot(e.clientX - c.left, e.clientY - c.top) < 20
+          || (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+        if (near) { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; }
+      });
+    });
+  });
+
   // --- zoeken: een tweede (oranje) stip voor een ander skigebied; Les Sybelles blijft altijd staan ---
   function showPlace(pl, keepZoom) {
     const d2 = $('dot2');
@@ -1671,6 +1693,7 @@
     lbl.innerHTML = '<b></b><small>sneeuw schatten…</small>';
     lbl.querySelector('b').textContent = pl.name;
     d2.hidden = false; $('search-clear').hidden = false;
+    flashLabels(d2.parentElement);
     placeSnow(pl, lbl.querySelector('small'));
     // Valt de plek buiten de ingezoomde uitsnede? Dan de hele Alpen tonen.
     if (zoomed && !keepZoom) {
