@@ -135,6 +135,14 @@
   .area { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .25s; }
   .area polygon { fill: none; stroke: #fff; stroke-width: 2.5px; vector-effect: non-scaling-stroke; stroke-linejoin: round; filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1px #000); }
   .mapwrap.z2 .area { opacity: 1; transition-delay: .3s; }
+  .villages { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  .mapwrap.z2 .villages { opacity: 1; transition-delay: .3s; }
+  .villages i { position: absolute; width: 0; height: 0; }
+  .villages i::before { content: ""; position: absolute; left: -1.5px; top: -1.5px; width: 3px; height: 3px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7); }
+  .villages span { position: absolute; top: 0; transform: translateY(-50%); white-space: nowrap; font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .03em; line-height: 1; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 1px #000; }
+  .villages .l span { right: 4px; }
+  .villages .r span { left: 4px; }
+  .villages .b span { left: 0; top: 4px; transform: translateX(-50%); }
   .mapwrap.z2 #dot { opacity: 0; }
   .mapwrap.z2 .map .layer { image-rendering: pixelated; }
 
@@ -427,6 +435,7 @@
     <div class="dot" id="dot"><span>Les Sybelles</span></div>
   </div>
   <svg class="area" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon id="area-line" points=""/></svg>
+  <div class="villages" id="villages" aria-hidden="true"></div>
   <div class="status" id="status" hidden></div>
 </div>
 
@@ -1666,6 +1675,11 @@
     [45.2396,6.1673],[45.2372,6.1709],[45.2369,6.1846],[45.2337,6.1891],[45.2303,6.1891],[45.2277,6.1865],[45.2219,6.1861],[45.2117,6.1753],
     [45.2036,6.1757],[45.2011,6.1798],[45.2009,6.1930],[45.1992,6.1961],[45.1989,6.2042]]
     .map(([la, lo]) => place('alps', la, lo));
+  // Dorpen in het gebied (OpenStreetMap), als kleine afkorting op de diepste zoom
+  // Stipje op het exacte punt; de tekst ernaast (l = links, r = rechts, b = eronder) zodat hij de omtrek niet raakt
+  const VILLAGES = [['LC', 45.2402, 6.2682, 'l'], ['LT', 45.2558, 6.2627, 'l'], ['SSA', 45.2214, 6.2290, 'r'], ['SJA', 45.2062, 6.2731, 'b']]
+    .map(([t, la, lo, side]) => ({ t, side, ...place('alps', la, lo) }));
+  $('villages').innerHTML = VILLAGES.map(v => `<i class="${v.side}"><span>${v.t}</span></i>`).join('');
   const AREA_C = { x: (Math.min(...AREA.map(a => a.x)) + Math.max(...AREA.map(a => a.x))) / 2, y: (Math.min(...AREA.map(a => a.y)) + Math.max(...AREA.map(a => a.y))) / 2 };
   function setZoom(z) {
     zoomLvl = z === true ? 1 : z === false ? 0 : z;
@@ -1677,6 +1691,7 @@
     $('mapwrap').classList.toggle('z2', zoomLvl === 2);
     // De omtrek staat buiten de geschaalde kaart, zodat het lijntje scherp en dun blijft
     $('area-line').setAttribute('points', AREA.map(a => `${((a.x * ZS + tx) * 100).toFixed(2)},${((a.y * ZS + ty) * 100).toFixed(2)}`).join(' '));
+    [...$('villages').children].forEach((s, i) => { const v = VILLAGES[i]; s.style.left = (v.x * ZS + tx) * 100 + '%'; s.style.top = (v.y * ZS + ty) * 100 + '%'; });
     $('zoom').textContent = ['Zoom Sybelles', 'Zoom gebied', 'Hele Alpen'][zoomLvl];
     if (typeof labelSide === 'function') labelSide();
   }
