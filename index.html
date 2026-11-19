@@ -1664,6 +1664,9 @@
   let ZS = 1, zoomLvl = 1;
   const zoomC = () => zoomLvl === 2 ? AREA_C : p;
   const zoomT = () => { const c = zoomC(); return { tx: Math.min(0, Math.max(1 - ZS, 0.5 - c.x * ZS)), ty: Math.min(0, Math.max(1 - ZS, 0.5 - c.y * ZS)) }; };
+  // De achtergrondkaart ligt overal ~0,7 px (kaartpixels van 960) naar links en ~0,8 px naar boven t.o.v. de Mercator-formule
+  // (gemeten met de meren uit OpenStreetMap, van Annecy tot het Gardameer); omtrek en dorpen schuiven mee zodat ze precies op de kaart liggen
+  const onMap = (la, lo) => { const q = place('alps', la, lo); return { x: q.x - 0.7 / 960, y: q.y - 0.8 / 586 }; };
   // Omtrek van Les Sybelles: ±300 m rond alle liften en pistes uit OpenStreetMap (incl. Saint-Colomban en Saint-Jean-d'Arves,
   // zonder Albiez), aan de zuidkant iets verruimd zodat het dorp Saint-Jean-d'Arves erbinnen valt
   const AREA = [[45.1970,6.2085],[45.1974,6.2191],[45.2039,6.2253],[45.2104,6.2261],[45.2166,6.2349],[45.2172,6.2411],[45.2189,6.2442],
@@ -1675,11 +1678,11 @@
     [45.2916,6.2251],[45.2834,6.2163],[45.2826,6.2097],[45.2724,6.1953],[45.2596,6.1887],[45.2484,6.1729],[45.2456,6.1719],[45.2417,6.1669],
     [45.2396,6.1673],[45.2372,6.1709],[45.2369,6.1846],[45.2337,6.1891],[45.2303,6.1891],[45.2277,6.1865],[45.2219,6.1861],[45.2117,6.1753],
     [45.2036,6.1757],[45.2011,6.1798],[45.2009,6.1930],[45.1992,6.1961],[45.1989,6.2042]]
-    .map(([la, lo]) => place('alps', la, lo));
+    .map(([la, lo]) => onMap(la, lo));
   // Dorpen in het gebied (OpenStreetMap), als kleine afkorting op de diepste zoom
   // Stipje op het exacte punt; de tekst ernaast (l = links, r = rechts, b = eronder, t = erboven) zodat hij de omtrek niet raakt
   const VILLAGES = [['LC', 45.2402, 6.2682, 'l'], ['LT', 45.2558, 6.2627, 'l'], ['SSA', 45.2214, 6.2290, 'r'], ['SJA', 45.2062, 6.2731, 't']]
-    .map(([t, la, lo, side]) => ({ t, side, ...place('alps', la, lo) }));
+    .map(([t, la, lo, side]) => ({ t, side, ...onMap(la, lo) }));
   $('villages').innerHTML = VILLAGES.map(v => `<i class="${v.side}"><span>${v.t}</span></i>`).join('');
   const AREA_C = { x: (Math.min(...AREA.map(a => a.x)) + Math.max(...AREA.map(a => a.x))) / 2, y: (Math.min(...AREA.map(a => a.y)) + Math.max(...AREA.map(a => a.y))) / 2 };
   function setZoom(z) {
